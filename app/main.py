@@ -1,12 +1,16 @@
-import sys
 from PySide6.QtWidgets import QApplication
 from app.ui.main_window import MainWindow
 
+from app.db.database import init_db
+
+
 def main():
-    app = QApplication(sys.argv)
+    init_db()
+    app = QApplication([])
     w = MainWindow()
     w.show()
-    sys.exit(app.exec())
+    app.exec()
+
 
 if __name__ == "__main__":
     main()
