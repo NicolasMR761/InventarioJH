@@ -1,0 +1,21 @@
+# Entorno virtual
+venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Base de datos (datos locales)
+app_data/
+*.db
+*.sqlite3
+
+# VS Code
+.vscode/
+
+# PyInstaller
+build/
+dist/
+*.spec
