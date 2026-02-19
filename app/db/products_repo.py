@@ -103,3 +103,13 @@ def desactivar_producto(product_id: int) -> None:
 
         p.activo = False
         db.commit()
+
+
+def cambiar_estado_producto(product_id: int) -> None:
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.id == product_id).first()
+        if not p:
+            raise ValueError("Producto no encontrado.")
+
+        p.activo = not p.activo
+        db.commit()

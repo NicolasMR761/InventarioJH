@@ -20,6 +20,10 @@ class MainWindow(QMainWindow):
         btn_productos.clicked.connect(self.abrir_productos)
         layout.addWidget(btn_productos)
 
+        btn_proveedores = QPushButton("Gestionar Proveedores")
+        btn_proveedores.clicked.connect(self.abrir_proveedores)
+        layout.addWidget(btn_proveedores)
+
         self.setCentralWidget(root)
 
     def abrir_productos(self):
@@ -27,3 +31,9 @@ class MainWindow(QMainWindow):
 
         self.win_productos = ProductsWindow()
         self.win_productos.show()
+
+    def abrir_proveedores(self):
+        from app.ui.suppliers_window import SuppliersWindow
+
+        self.win_suppliers = SuppliersWindow()
+        self.win_suppliers.show()

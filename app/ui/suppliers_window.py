@@ -9,27 +9,26 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-from app.db.products_repo import listar_productos, cambiar_estado_producto
+from app.db.suppliers_repo import listar_proveedores, cambiar_estado_proveedor
 
 
-class ProductsWindow(QWidget):
+class SuppliersWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Productos")
+        self.setWindowTitle("Proveedores")
         self.resize(900, 520)
 
         layout = QVBoxLayout(self)
 
-        # Barra superior
         top = QHBoxLayout()
 
         self.txt_buscar = QLineEdit()
-        self.txt_buscar.setPlaceholderText("Buscar por código o nombre...")
-        self.txt_buscar.textChanged.connect(self.cargar_productos)
+        self.txt_buscar.setPlaceholderText("Buscar por nombre o NIT...")
+        self.txt_buscar.textChanged.connect(self.cargar_proveedores)
         top.addWidget(self.txt_buscar)
 
         btn_refrescar = QPushButton("Refrescar")
-        btn_refrescar.clicked.connect(self.cargar_productos)
+        btn_refrescar.clicked.connect(self.cargar_proveedores)
         top.addWidget(btn_refrescar)
 
         btn_nuevo = QPushButton("Nuevo")
@@ -47,86 +46,85 @@ class ProductsWindow(QWidget):
         top.addStretch()
         layout.addLayout(top)
 
-        # Tabla
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Código", "Nombre", "Unidad", "Precio Venta", "Activo"]
+            ["ID", "Nombre", "NIT", "Teléfono", "Dirección", "Activo"]
         )
-        self.table.setSortingEnabled(True)  # opcional: ordenar columnas
+        self.table.setSortingEnabled(True)
         self.table.cellDoubleClicked.connect(self._dbl_click_editar)
         layout.addWidget(self.table)
 
-        self._productos = []
-        self.cargar_productos()
+        self._proveedores = []
+        self.cargar_proveedores()
 
-    def cargar_productos(self):
+    def cargar_proveedores(self):
         texto = self.txt_buscar.text().strip()
-        self._productos = listar_productos(texto=texto, incluir_inactivos=True)
+        self._proveedores = listar_proveedores(texto=texto, incluir_inactivos=True)
 
-        self.table.setRowCount(len(self._productos))
+        self.table.setRowCount(len(self._proveedores))
 
-        for row, p in enumerate(self._productos):
+        for row, p in enumerate(self._proveedores):
             self.table.setItem(row, 0, QTableWidgetItem(str(p.id)))
-            self.table.setItem(row, 1, QTableWidgetItem(p.codigo))
-            self.table.setItem(row, 2, QTableWidgetItem(p.nombre))
-            self.table.setItem(row, 3, QTableWidgetItem(p.unidad))
-            self.table.setItem(row, 4, QTableWidgetItem(f"{p.precio_venta:.2f}"))
+            self.table.setItem(row, 1, QTableWidgetItem(p.nombre or ""))
+            self.table.setItem(row, 2, QTableWidgetItem(p.nit or ""))
+            self.table.setItem(row, 3, QTableWidgetItem(p.telefono or ""))
+            self.table.setItem(row, 4, QTableWidgetItem(p.direccion or ""))
             self.table.setItem(row, 5, QTableWidgetItem("Sí" if p.activo else "No"))
 
         self.table.resizeColumnsToContents()
 
-    def _get_selected_product(self):
+    def _get_selected(self):
         row = self.table.currentRow()
-        if row < 0 or row >= len(self._productos):
+        if row < 0 or row >= len(self._proveedores):
             return None
-        return self._productos[row]
+        return self._proveedores[row]
 
     def abrir_form_nuevo(self):
-        from app.ui.product_form import ProductForm
+        from app.ui.supplier_form import SupplierForm
 
-        dlg = ProductForm(self)
+        dlg = SupplierForm(self)
         if dlg.exec():
-            self.cargar_productos()
+            self.cargar_proveedores()
 
     def abrir_form_editar(self):
-        from app.ui.product_form import ProductForm
+        from app.ui.supplier_form import SupplierForm
 
-        p = self._get_selected_product()
+        p = self._get_selected()
         if not p:
             QMessageBox.information(
-                self, "Selecciona", "Selecciona un producto primero."
+                self, "Selecciona", "Selecciona un proveedor primero."
             )
             return
 
-        dlg = ProductForm(self, product=p)
+        dlg = SupplierForm(self, supplier=p)
         if dlg.exec():
-            self.cargar_productos()
+            self.cargar_proveedores()
 
     def _dbl_click_editar(self, row, col):
         self.abrir_form_editar()
 
     def cambiar_estado_seleccionado(self):
-        p = self._get_selected_product()
+        p = self._get_selected()
         if not p:
             QMessageBox.information(
-                self, "Selecciona", "Selecciona un producto primero."
+                self, "Selecciona", "Selecciona un proveedor primero."
             )
             return
 
         r = QMessageBox.question(
             self,
             "Confirmar",
-            f"¿Cambiar estado del producto '{p.nombre}' (código {p.codigo})?\n\n"
+            f"¿Cambiar estado del proveedor '{p.nombre}'?\n\n"
             f"Estado actual: {'Activo' if p.activo else 'Inactivo'}",
         )
         if r != QMessageBox.Yes:
             return
 
         try:
-            cambiar_estado_producto(p.id)
+            cambiar_estado_proveedor(p.id)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudo cambiar estado:\n{e}")
             return
 
-        self.cargar_productos()
+        self.cargar_proveedores()
