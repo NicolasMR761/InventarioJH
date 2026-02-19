@@ -71,7 +71,13 @@ class ProductsWindow(QWidget):
             self.table.setItem(row, 1, QTableWidgetItem(p.codigo))
             self.table.setItem(row, 2, QTableWidgetItem(p.nombre))
             self.table.setItem(row, 3, QTableWidgetItem(p.unidad))
-            self.table.setItem(row, 4, QTableWidgetItem(f"{p.precio_venta:.2f}"))
+            precio_formateado = (
+                "${:,.2f}".format(p.precio_venta)
+                .replace(",", "X")
+                .replace(".", ",")
+                .replace("X", ".")
+            )
+            self.table.setItem(row, 4, QTableWidgetItem(precio_formateado))
             self.table.setItem(row, 5, QTableWidgetItem("Sí" if p.activo else "No"))
 
         self.table.resizeColumnsToContents()
