@@ -1,6 +1,9 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import relationship
+
 
 Base = declarative_base()
 
@@ -14,10 +17,9 @@ class Product(Base):
     unidad = Column(String(20), default="und")
     precio_venta = Column(Float, default=0.0)
     stock_minimo = Column(Float, default=0.0)
+    stock_actual = Column(Float, default=0.0)  # ← NUEVO
     activo = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    from sqlalchemy import Column, Integer, String, Boolean
 
 
 class Supplier(Base):
@@ -32,3 +34,63 @@ class Supplier(Base):
 
     def __repr__(self):
         return f"<Supplier {self.nombre}>"
+
+
+class Entry(Base):
+    __tablename__ = "entries"
+
+    id = Column(Integer, primary_key=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False)
+
+    fecha = Column(DateTime, default=datetime.utcnow)
+    total = Column(Float, default=0.0)
+
+    supplier = relationship("Supplier")
+    details = relationship(
+        "EntryDetail", back_populates="entry", cascade="all, delete-orphan"
+    )
+
+
+class EntryDetail(Base):
+    __tablename__ = "entry_details"
+
+    id = Column(Integer, primary_key=True)
+    entry_id = Column(Integer, ForeignKey("entries.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+
+    cantidad = Column(Float, nullable=False)
+    precio_compra = Column(Float, default=0.0)
+    subtotal = Column(Float, default=0.0)
+
+    entry = relationship("Entry", back_populates="details")
+    product = relationship("Product")
+
+
+class Sale(Base):
+    __tablename__ = "sales"
+
+    id = Column(Integer, primary_key=True)
+    fecha = Column(DateTime, default=datetime.utcnow)
+    total = Column(Float, default=0.0)
+
+    details = relationship(
+        "SaleDetail", back_populates="sale", cascade="all, delete-orphan"
+    )
+    anulada = Column(Boolean, default=False)
+    motivo_anulacion = Column(String(255), nullable=True)
+    anulada_en = Column(DateTime, nullable=True)
+
+
+class SaleDetail(Base):
+    __tablename__ = "sale_details"
+
+    id = Column(Integer, primary_key=True)
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+
+    cantidad = Column(Float, nullable=False)
+    precio_venta = Column(Float, default=0.0)
+    subtotal = Column(Float, default=0.0)
+
+    sale = relationship("Sale", back_populates="details")
+    product = relationship("Product")

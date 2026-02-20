@@ -4,8 +4,13 @@ from sqlalchemy.orm import sessionmaker
 from app.db.models import Base
 
 
+from pathlib import Path
+
+
 def get_app_data_dir() -> Path:
-    data_dir = Path.cwd() / "app_data"
+    # database.py está en app/db/database.py => subir 2 niveles al root del proyecto
+    project_root = Path(__file__).resolve().parents[2]
+    data_dir = project_root / "app_data"
     data_dir.mkdir(exist_ok=True)
     return data_dir
 

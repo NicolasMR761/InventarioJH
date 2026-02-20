@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
 )
+from PySide6.QtCore import Qt
 
 from app.db.products_repo import listar_productos, cambiar_estado_producto
 
@@ -49,38 +50,61 @@ class ProductsWindow(QWidget):
 
         # Tabla
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Código", "Nombre", "Unidad", "Precio Venta", "Activo"]
+            ["ID", "Código", "Nombre", "Unidad", "Stock", "Precio Venta", "Activo"]
         )
-        self.table.setSortingEnabled(True)  # opcional: ordenar columnas
+        self.table.setSortingEnabled(True)
         self.table.cellDoubleClicked.connect(self._dbl_click_editar)
         layout.addWidget(self.table)
 
         self._productos = []
         self.cargar_productos()
 
+    # ✅ Esto garantiza recarga cuando vuelves a la ventana
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.cargar_productos()
+
     def cargar_productos(self):
         texto = self.txt_buscar.text().strip()
         self._productos = listar_productos(texto=texto, incluir_inactivos=True)
+
+        # ✅ Evita que el sorting revuelva filas mientras llenas
+        was_sorting = self.table.isSortingEnabled()
+        self.table.setSortingEnabled(False)
+        self.table.blockSignals(True)
 
         self.table.setRowCount(len(self._productos))
 
         for row, p in enumerate(self._productos):
             self.table.setItem(row, 0, QTableWidgetItem(str(p.id)))
-            self.table.setItem(row, 1, QTableWidgetItem(p.codigo))
-            self.table.setItem(row, 2, QTableWidgetItem(p.nombre))
-            self.table.setItem(row, 3, QTableWidgetItem(p.unidad))
+            self.table.setItem(row, 1, QTableWidgetItem(p.codigo or ""))
+            self.table.setItem(row, 2, QTableWidgetItem(p.nombre or ""))
+            self.table.setItem(row, 3, QTableWidgetItem(p.unidad or ""))
+
+            # Stock (col 4)
+            item_stock = QTableWidgetItem(f"{float(p.stock_actual or 0.0):.2f}")
+            item_stock.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.table.setItem(row, 4, item_stock)
+
+            # Precio (col 5)
             precio_formateado = (
-                "${:,.2f}".format(p.precio_venta)
+                "${:,.2f}".format(float(p.precio_venta or 0.0))
                 .replace(",", "X")
                 .replace(".", ",")
                 .replace("X", ".")
             )
-            self.table.setItem(row, 4, QTableWidgetItem(precio_formateado))
-            self.table.setItem(row, 5, QTableWidgetItem("Sí" if p.activo else "No"))
+            item_precio = QTableWidgetItem(precio_formateado)
+            item_precio.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.table.setItem(row, 5, item_precio)
 
+            # Activo (col 6)
+            self.table.setItem(row, 6, QTableWidgetItem("Sí" if p.activo else "No"))
+
+        self.table.blockSignals(False)
         self.table.resizeColumnsToContents()
+        self.table.setSortingEnabled(was_sorting)
 
     def _get_selected_product(self):
         row = self.table.currentRow()

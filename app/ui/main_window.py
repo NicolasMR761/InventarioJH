@@ -16,15 +16,29 @@ class MainWindow(QMainWindow):
         titulo = QLabel("Sistema de Inventario JH")
         layout.addWidget(titulo)
 
+        # --- Botón Productos ---
         btn_productos = QPushButton("Gestionar Productos")
         btn_productos.clicked.connect(self.abrir_productos)
         layout.addWidget(btn_productos)
 
+        # --- Botón Proveedores ---
         btn_proveedores = QPushButton("Gestionar Proveedores")
         btn_proveedores.clicked.connect(self.abrir_proveedores)
         layout.addWidget(btn_proveedores)
 
+        # --- Botón Entradas ---
+        btn_entradas = QPushButton("Entradas (Compras)")
+        btn_entradas.clicked.connect(self.abrir_entradas)
+        layout.addWidget(btn_entradas)
+
+        # --- Botón Ventas ---
+        btn_ventas = QPushButton("Ventas")
+        btn_ventas.clicked.connect(self.abrir_ventas)
+        layout.addWidget(btn_ventas)
+
         self.setCentralWidget(root)
+
+    # ---------------- MÉTODOS ----------------
 
     def abrir_productos(self):
         from app.ui.products_window import ProductsWindow
@@ -37,3 +51,15 @@ class MainWindow(QMainWindow):
 
         self.win_suppliers = SuppliersWindow()
         self.win_suppliers.show()
+
+    def abrir_entradas(self):
+        from app.ui.entries_window import EntriesWindow
+
+        self.win_entries = EntriesWindow()
+        self.win_entries.show()
+
+    def abrir_ventas(self):
+        from app.ui.sales_window import SalesWindow
+
+        self.win_sales = SalesWindow()
+        self.win_sales.show()
