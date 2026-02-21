@@ -28,7 +28,7 @@ class SalesWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ventas")
-        self.resize(800, 520)
+        self.resize(900, 560)
 
         self.items: list[dict] = []
 
@@ -58,6 +58,18 @@ class SalesWindow(QWidget):
 
         self.btn_agregar = QPushButton("Agregar")
         top.addWidget(self.btn_agregar, 1)
+
+        # --- Método de pago (FULL caja) ---
+        pay = QHBoxLayout()
+        root.addLayout(pay)
+
+        pay.addWidget(QLabel("Método de pago:"))
+        self.cbo_metodo = QComboBox()
+        self.cbo_metodo.addItems(
+            ["Efectivo", "Transferencia", "Nequi", "Débito", "Crédito"]
+        )
+        pay.addWidget(self.cbo_metodo, 1)
+        pay.addStretch()
 
         # --- Tabla de items ---
         self.tbl = QTableWidget(0, 5)
@@ -91,7 +103,7 @@ class SalesWindow(QWidget):
         bottom = QHBoxLayout()
         root.addLayout(bottom)
 
-        self.lbl_total = QLabel("Total: 0.00")
+        self.lbl_total = QLabel("Total: $0,00")
         self.lbl_total.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         bottom.addWidget(self.lbl_total, 1)
 
@@ -104,16 +116,30 @@ class SalesWindow(QWidget):
         # Anular venta
         self.btn_anular = QPushButton("Anular venta seleccionada")
         bottom.addWidget(self.btn_anular)
-        self.btn_anular.clicked.connect(self.anular_seleccionada)
 
         # Eventos
         self.btn_agregar.clicked.connect(self.agregar_item)
         self.btn_quitar.clicked.connect(self.quitar_item)
         self.btn_guardar.clicked.connect(self.guardar_venta)
+        self.btn_anular.clicked.connect(self.anular_seleccionada)
 
         self.cargar_productos()
         self.cargar_historial()
 
+    # -----------------------
+    # Utilidades formato $
+    # -----------------------
+    def _fmt_money(self, value: float) -> str:
+        return (
+            "${:,.2f}".format(float(value or 0.0))
+            .replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        )
+
+    # -----------------------
+    # Historial / Detalle
+    # -----------------------
     def cargar_historial(self) -> None:
         ventas = listar_ventas(200)
         self.tbl_hist.setRowCount(0)
@@ -127,7 +153,9 @@ class SalesWindow(QWidget):
 
             estado = " (ANULADA)" if getattr(s, "anulada", False) else ""
             self.tbl_hist.setItem(
-                row, 2, QTableWidgetItem(f"{float(s.total or 0):.2f}{estado}")
+                row,
+                2,
+                QTableWidgetItem(f"{self._fmt_money(float(s.total or 0.0))}{estado}"),
             )
 
         self.tbl_det.setRowCount(0)
@@ -155,10 +183,15 @@ class SalesWindow(QWidget):
             self.tbl_det.setItem(row, 0, QTableWidgetItem(nombre))
             self.tbl_det.setItem(row, 1, QTableWidgetItem(f"{float(d.cantidad):.2f}"))
             self.tbl_det.setItem(
-                row, 2, QTableWidgetItem(f"{float(d.precio_venta):.2f}")
+                row, 2, QTableWidgetItem(self._fmt_money(float(d.precio_venta)))
             )
-            self.tbl_det.setItem(row, 3, QTableWidgetItem(f"{float(d.subtotal):.2f}"))
+            self.tbl_det.setItem(
+                row, 3, QTableWidgetItem(self._fmt_money(float(d.subtotal)))
+            )
 
+    # -----------------------
+    # Productos
+    # -----------------------
     def cargar_productos(self) -> None:
         self.cbo_producto.clear()
         with SessionLocal() as db:
@@ -168,10 +201,13 @@ class SalesWindow(QWidget):
                 .order_by(Product.nombre.asc())
                 .all()
             )
+
         for p in products:
-            # guardamos el ID como data
             self.cbo_producto.addItem(f"{p.nombre} (Stock: {p.stock_actual})", p.id)
 
+    # -----------------------
+    # Items venta
+    # -----------------------
     def agregar_item(self) -> None:
         if self.cbo_producto.count() == 0:
             QMessageBox.warning(self, "Ventas", "No hay productos activos para vender.")
@@ -201,8 +237,8 @@ class SalesWindow(QWidget):
         self.tbl.setItem(row, 0, QTableWidgetItem(str(product_id)))
         self.tbl.setItem(row, 1, QTableWidgetItem(nombre))
         self.tbl.setItem(row, 2, QTableWidgetItem(f"{cantidad:.2f}"))
-        self.tbl.setItem(row, 3, QTableWidgetItem(f"{precio:.2f}"))
-        self.tbl.setItem(row, 4, QTableWidgetItem(f"{subtotal:.2f}"))
+        self.tbl.setItem(row, 3, QTableWidgetItem(self._fmt_money(precio)))
+        self.tbl.setItem(row, 4, QTableWidgetItem(self._fmt_money(subtotal)))
 
         self.actualizar_total()
 
@@ -211,7 +247,6 @@ class SalesWindow(QWidget):
         if row < 0:
             return
 
-        # borrar del array (misma posición)
         try:
             self.items.pop(row)
         except Exception:
@@ -224,15 +259,21 @@ class SalesWindow(QWidget):
         total = 0.0
         for it in self.items:
             total += float(it["cantidad"]) * float(it["precio_venta"])
-        self.lbl_total.setText(f"Total: {total:.2f}")
+        self.lbl_total.setText(f"Total: {self._fmt_money(total)}")
 
+    # -----------------------
+    # Guardar / Anular
+    # -----------------------
     def guardar_venta(self) -> None:
         if not self.items:
             QMessageBox.warning(self, "Ventas", "Agrega al menos 1 producto.")
             return
 
+        metodo = self.cbo_metodo.currentText()
+
         try:
-            sale = crear_venta(self.items)
+            # ✅ FULL CAJA: pasamos metodo_pago al repo (queda en CashMovement.observacion)
+            sale = crear_venta(self.items, metodo_pago=metodo)
         except Exception as e:
             QMessageBox.critical(self, "Error al guardar", str(e))
             return
@@ -240,7 +281,7 @@ class SalesWindow(QWidget):
         QMessageBox.information(
             self,
             "Venta guardada",
-            f"Venta #{sale.id} guardada.\nTotal: {sale.total:.2f}",
+            f"Venta #{sale.id} guardada.\nTotal: {self._fmt_money(float(sale.total))}\nMétodo: {metodo}",
         )
 
         # limpiar para nueva venta
@@ -265,19 +306,22 @@ class SalesWindow(QWidget):
         confirm = QMessageBox.question(
             self,
             "Confirmar anulación",
-            f"¿Anular la venta #{sale_id}?\nEsto devolverá el stock.",
+            f"¿Anular la venta #{sale_id}?\nEsto devolverá el stock y registrará EGRESO en caja.",
         )
         if confirm != QMessageBox.Yes:
             return
 
+        metodo = self.cbo_metodo.currentText()
+
         try:
-            anular_venta(sale_id, motivo="Anulada desde UI")
+            # ✅ FULL CAJA: pasamos metodo y motivo para que quede trazabilidad en caja
+            anular_venta(sale_id, motivo="Anulada desde UI", metodo_pago=metodo)
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
             return
 
         QMessageBox.information(
-            self, "OK", f"Venta #{sale_id} anulada y stock devuelto."
+            self, "OK", f"Venta #{sale_id} anulada. Stock devuelto y caja actualizada."
         )
         self.cargar_historial()
         self.cargar_productos()

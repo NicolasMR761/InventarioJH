@@ -38,6 +38,11 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(root)
 
+        # --- Botón Caja ---
+        btn_caja = QPushButton("Caja")
+        btn_caja.clicked.connect(self.abrir_caja)
+        layout.addWidget(btn_caja)
+
     # ---------------- MÉTODOS ----------------
 
     def abrir_productos(self):
@@ -63,3 +68,9 @@ class MainWindow(QMainWindow):
 
         self.win_sales = SalesWindow()
         self.win_sales.show()
+
+    def abrir_caja(self):
+        from app.ui.cash_window import CashWindow
+
+        self.win_caja = CashWindow()
+        self.win_caja.show()

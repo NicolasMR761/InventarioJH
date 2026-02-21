@@ -6,7 +6,7 @@ from sqlalchemy.orm import joinedload
 
 from app.db.database import SessionLocal
 from app.db.models import Sale, SaleDetail, Product, CashMovement
-from sqlalchemy.orm import joinedload
+from app.db.cash_repo import registrar_movimiento_en_db
 
 
 # ----------------------------
@@ -43,7 +43,7 @@ def obtener_venta_con_detalle(sale_id: int) -> Sale | None:
 # ----------------------------
 # Crear venta
 # ----------------------------
-def crear_venta(items: list[dict]) -> Sale:
+def crear_venta(items: list[dict], metodo_pago: str = "Efectivo") -> Sale:
     """
     items = [
         {"product_id": 1, "cantidad": 2, "precio_venta": 5000},
@@ -53,9 +53,13 @@ def crear_venta(items: list[dict]) -> Sale:
     Crea Sale + SaleDetail y RESTA stock_actual a Product.
     Valida stock suficiente.
     Registra movimiento en caja (INGRESO) EN LA MISMA TRANSACCIÓN.
+
+    metodo_pago: texto que se guarda en observación del movimiento de caja.
     """
     if not items:
         raise ValueError("La venta debe tener al menos 1 producto.")
+
+    metodo_pago = (metodo_pago or "Efectivo").strip()
 
     with SessionLocal() as db:
         sale = Sale(total=0.0)
@@ -96,7 +100,6 @@ def crear_venta(items: list[dict]) -> Sale:
                     subtotal=subtotal,
                 )
 
-                # Agregar detalle a la venta
                 sale.details.append(detail)
 
                 # Descontar stock
@@ -115,18 +118,17 @@ def crear_venta(items: list[dict]) -> Sale:
                 sale.anulada_en = None
 
             db.add(sale)
-
-            # flush -> para obtener sale.id sin cerrar transacción
-            db.flush()
+            db.flush()  # para obtener sale.id
 
             # Movimiento de caja (misma transacción)
-            mov = CashMovement(
+            registrar_movimiento_en_db(
+                db,
                 tipo="INGRESO",
                 concepto="Venta",
                 monto=float(sale.total),
                 referencia=f"Venta #{sale.id}",
+                observacion=f"Método: {metodo_pago}" if metodo_pago else None,
             )
-            db.add(mov)
 
             db.commit()
             db.refresh(sale)
@@ -140,7 +142,9 @@ def crear_venta(items: list[dict]) -> Sale:
 # ----------------------------
 # Anular venta
 # ----------------------------
-def anular_venta(sale_id: int, motivo: str | None = None) -> Sale:
+def anular_venta(
+    sale_id: int, motivo: str | None = None, metodo_pago: str | None = None
+) -> Sale:
     """
     Anula una venta:
     - Marca Sale.anulada = True (si existe)
@@ -148,8 +152,11 @@ def anular_venta(sale_id: int, motivo: str | None = None) -> Sale:
     - Devuelve stock de cada producto
     - Registra un EGRESO en caja (devolución) en la misma transacción
 
-    Nota: si tu UI no usa esto aún, igual queda listo.
+    metodo_pago (opcional): si lo pasas, queda en observación junto con el motivo.
     """
+    metodo_pago = (metodo_pago or "").strip() or None
+    motivo_txt = (motivo or "").strip() or None
+
     with SessionLocal() as db:
         try:
             sale = (
@@ -161,7 +168,6 @@ def anular_venta(sale_id: int, motivo: str | None = None) -> Sale:
             if not sale:
                 raise ValueError("Venta no encontrada.")
 
-            # Si el modelo tiene anulada y ya está anulada
             if hasattr(sale, "anulada") and sale.anulada:
                 raise ValueError("La venta ya está anulada.")
 
@@ -176,22 +182,28 @@ def anular_venta(sale_id: int, motivo: str | None = None) -> Sale:
             if hasattr(sale, "anulada"):
                 sale.anulada = True
             if hasattr(sale, "motivo_anulacion"):
-                sale.motivo_anulacion = (motivo or "").strip() or None
+                sale.motivo_anulacion = motivo_txt
             if hasattr(sale, "anulada_en"):
                 sale.anulada_en = datetime.now()
 
             db.add(sale)
             db.flush()
 
-            # Registrar devolución en caja
-            mov = CashMovement(
+            obs_parts = []
+            if metodo_pago:
+                obs_parts.append(f"Método: {metodo_pago}")
+            if motivo_txt:
+                obs_parts.append(f"Motivo: {motivo_txt}")
+            obs = " | ".join(obs_parts) if obs_parts else None
+
+            registrar_movimiento_en_db(
+                db,
                 tipo="EGRESO",
                 concepto="Anulación de venta",
                 monto=float(sale.total or 0.0),
                 referencia=f"Venta #{sale.id}",
-                observacion=(motivo or "").strip() or None,
+                observacion=obs,
             )
-            db.add(mov)
 
             db.commit()
             db.refresh(sale)

@@ -1,11 +1,16 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Date,
+)
+from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
-from sqlalchemy import ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
 
 Base = declarative_base()
 
@@ -86,6 +91,21 @@ class CashMovement(Base):
     # ejemplo: "Venta #5" o "Compra #3"
 
     observacion = Column(String, nullable=True)
+
+
+class CashClosure(Base):
+    __tablename__ = "cash_closures"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    fecha = Column(Date, nullable=False, unique=True)  # 1 cierre por día
+
+    total_ingresos = Column(Float, default=0.0)
+    total_egresos = Column(Float, default=0.0)
+    saldo_inicial = Column(Float, default=0.0)
+    saldo_final = Column(Float, default=0.0)
+
+    creado_en = Column(DateTime, default=datetime.now)
+    cerrado_por = Column(String(120), nullable=True)  # opcional (usuario)
 
 
 class Sale(Base):

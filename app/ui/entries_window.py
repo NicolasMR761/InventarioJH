@@ -8,19 +8,21 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QMessageBox,
+    QCheckBox,
 )
+from PySide6.QtCore import Qt
 
 from app.db.entries_repo import crear_entrada
 from app.db.products_repo import listar_productos
 from app.db.suppliers_repo import listar_proveedores
-from PySide6.QtCore import Qt
+from app.db.cash_repo import registrar_movimiento
 
 
 class EntriesWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Entradas (Compras)")
-        self.resize(950, 550)
+        self.resize(950, 600)
 
         layout = QVBoxLayout(self)
 
@@ -41,6 +43,23 @@ class EntriesWindow(QWidget):
 
         top.addStretch()
         layout.addLayout(top)
+
+        # --- Pagado + Método ---
+        pago = QHBoxLayout()
+
+        self.chk_pagado = QCheckBox("Pagado (sale de caja)")
+        self.chk_pagado.setChecked(True)  # por defecto, compras pagadas
+        pago.addWidget(self.chk_pagado)
+
+        pago.addWidget(QLabel("Método:"))
+        self.cbo_metodo = QComboBox()
+        self.cbo_metodo.addItems(
+            ["Efectivo", "Transferencia", "Nequi", "Débito", "Crédito"]
+        )
+        pago.addWidget(self.cbo_metodo)
+
+        pago.addStretch()
+        layout.addLayout(pago)
 
         # --- Tabla detalle ---
         self.table = QTableWidget()
@@ -114,8 +133,20 @@ class EntriesWindow(QWidget):
             self.recalcular_totales()
 
     def _parse_float(self, s: str) -> float:
+        """
+        Permite entradas como:
+        - 5000
+        - 5000.5
+        - 5.000
+        - 5.000,50
+        - $5.000,50
+        """
         try:
-            return float((s or "0").replace(",", "."))
+            raw = (s or "0").strip()
+            raw = raw.replace("$", "").replace(" ", "")
+            raw = raw.replace(".", "")  # miles
+            raw = raw.replace(",", ".")  # decimal
+            return float(raw)
         except Exception:
             return 0.0
 
@@ -126,6 +157,18 @@ class EntriesWindow(QWidget):
             .replace(".", ",")
             .replace("X", ".")
         )
+
+    def _total_actual(self) -> float:
+        total = 0.0
+        for row in range(self.table.rowCount()):
+            cantidad = self._parse_float(
+                self.table.item(row, 1).text() if self.table.item(row, 1) else "0"
+            )
+            precio = self._parse_float(
+                self.table.item(row, 2).text() if self.table.item(row, 2) else "0"
+            )
+            total += max(cantidad, 0.0) * max(precio, 0.0)
+        return total
 
     def recalcular_totales(self):
         self.table.blockSignals(True)  # ✅ evita el loop
@@ -138,13 +181,12 @@ class EntriesWindow(QWidget):
             precio = self._parse_float(
                 self.table.item(row, 2).text() if self.table.item(row, 2) else "0"
             )
+
             subtotal = max(cantidad, 0.0) * max(precio, 0.0)
             total += subtotal
 
             item = QTableWidgetItem(f"{subtotal:.2f}")
-            item.setFlags(
-                item.flags() & ~Qt.ItemIsEditable
-            )  # o puedes bloquear edición aquí si quieres
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row, 3, item)
 
         self.lbl_total.setText(f"Total: {self._fmt_money(total)}")
@@ -202,17 +244,51 @@ class EntriesWindow(QWidget):
             QMessageBox.warning(self, "Sin items", "Agrega al menos un producto.")
             return
 
-        print("DEBUG: supplier_id =", supplier_id)
-        print("DEBUG: items =", items)
+        total = self._total_actual()
+        if total <= 0:
+            QMessageBox.warning(self, "Total inválido", "El total debe ser mayor a 0.")
+            return
 
         try:
-            crear_entrada(supplier_id=supplier_id, items=items)
-            print("DEBUG: crear_entrada ejecutada OK")
+            # 1) Crear entrada (esto suma stock y guarda detalles)
+            entry = crear_entrada(
+                supplier_id=supplier_id,
+                items=items,
+                pagado=self.chk_pagado.isChecked(),
+                metodo_pago=self.cbo_metodo.currentText(),
+            )
+
+            # 2) Si está pagado, registra EGRESO en Caja
+            if self.chk_pagado.isChecked():
+                metodo = self.cbo_metodo.currentText()
+                proveedor_txt = self.cbo_supplier.currentText()
+
+                concepto = f"Compra (Entrada #{entry.id})"
+                if proveedor_txt:
+                    concepto += f" - {proveedor_txt}"
+
+                registrar_movimiento(
+                    tipo="EGRESO",
+                    concepto=concepto,
+                    monto=float(entry.total or total),
+                    referencia=f"Entrada {entry.id}",
+                    observacion=f"Método: {metodo}",
+                )
+
+            # 3) UX
+            msg = f"Entrada #{entry.id} guardada. Stock actualizado."
+            if self.chk_pagado.isChecked():
+                msg += " Caja actualizada (EGRESO)."
+            else:
+                msg += " (Compra a crédito: no afecta caja)."
+
+            QMessageBox.information(self, "OK", msg)
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudo guardar la entrada:\n{e}")
             return
 
-        QMessageBox.information(self, "OK", "Entrada guardada. Stock actualizado.")
+        # Reset
         self.table.setRowCount(0)
         self.agregar_fila()
         self.recalcular_totales()
