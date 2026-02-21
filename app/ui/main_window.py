@@ -1,5 +1,14 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QLabel,
+    QPushButton,
+    QMessageBox,
+)
 from app.db.database import init_db
+from app.utils.backup import crear_backup
+from app.db.database import get_app_data_dir
 
 
 class MainWindow(QMainWindow):
@@ -43,6 +52,11 @@ class MainWindow(QMainWindow):
         btn_caja.clicked.connect(self.abrir_caja)
         layout.addWidget(btn_caja)
 
+        # --- Botón Backup ---
+        self.btn_backup = QPushButton("Crear Backup")
+        self.btn_backup.clicked.connect(self.hacer_backup)
+        layout.addWidget(self.btn_backup)
+
     # ---------------- MÉTODOS ----------------
 
     def abrir_productos(self):
@@ -74,3 +88,18 @@ class MainWindow(QMainWindow):
 
         self.win_caja = CashWindow()
         self.win_caja.show()
+
+    def hacer_backup(self):
+        try:
+            ruta_db = get_app_data_dir() / "inventario.db"
+
+            ruta_backup = crear_backup(str(ruta_db))
+
+            QMessageBox.information(
+                self, "Backup creado", f"Backup guardado en:\n{ruta_backup}"
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error", f"No se pudo crear el backup:\n{str(e)}"
+            )
