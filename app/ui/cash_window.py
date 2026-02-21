@@ -97,6 +97,10 @@ class CashWindow(QWidget):
         self.lbl_estado = QLabel("")
         top.addWidget(self.lbl_estado)
 
+        self.lbl_resumen = QLabel("Balance: $0,00 | Ingresos: $0,00 | Egresos: $0,00")
+        self.lbl_resumen.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        top.addWidget(self.lbl_resumen, 1)
+
         top.addStretch()
 
         self.btn_export = QPushButton("Exportar PDF")
@@ -151,6 +155,22 @@ class CashWindow(QWidget):
             # saldo total (global)
             saldo = obtener_saldo()
             self.lbl_saldo.setText(f"Saldo: {_fmt_cop(saldo)}")
+
+            # Resumen del rango (o día) según filtros
+            if d1 == d2:
+                data = resumen_del_dia(d1)
+                ingresos = float(data["ingresos"] or 0.0)
+                egresos = float(data["egresos"] or 0.0)
+            else:
+                data = resumen_rango(d1, d2)
+                ingresos = float(data["ingresos"] or 0.0)
+                egresos = float(data["egresos"] or 0.0)
+
+            balance = ingresos - egresos
+
+            self.lbl_resumen.setText(
+                f"Balance: {_fmt_cop(balance)}  |  Ingresos: {_fmt_cop(ingresos)}  |  Egresos: {_fmt_cop(egresos)}"
+            )
 
             self._movs = listar_movimientos(
                 limit=1000,

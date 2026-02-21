@@ -27,6 +27,7 @@ class Product(Base):
     stock_actual = Column(Float, default=0.0)  # ← NUEVO
     activo = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    costo_promedio = Column(Float, default=0.0)
 
 
 class Supplier(Base):
@@ -133,6 +134,8 @@ class SaleDetail(Base):
     cantidad = Column(Float, nullable=False)
     precio_venta = Column(Float, default=0.0)
     subtotal = Column(Float, default=0.0)
+    costo_unitario = Column(Float, default=0.0)
+    utilidad = Column(Float, default=0.0)
 
     sale = relationship("Sale", back_populates="details")
     product = relationship("Product")
