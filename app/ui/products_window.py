@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QBrush, QFont
 
 from app.db.products_repo import listar_productos, cambiar_estado_producto
 
@@ -61,7 +62,6 @@ class ProductsWindow(QWidget):
         self._productos = []
         self.cargar_productos()
 
-    # ✅ Esto garantiza recarga cuando vuelves a la ventana
     def showEvent(self, event):
         super().showEvent(event)
         self.cargar_productos()
@@ -70,7 +70,6 @@ class ProductsWindow(QWidget):
         texto = self.txt_buscar.text().strip()
         self._productos = listar_productos(texto=texto, incluir_inactivos=True)
 
-        # ✅ Evita que el sorting revuelva filas mientras llenas
         was_sorting = self.table.isSortingEnabled()
         self.table.setSortingEnabled(False)
         self.table.blockSignals(True)
@@ -78,17 +77,28 @@ class ProductsWindow(QWidget):
         self.table.setRowCount(len(self._productos))
 
         for row, p in enumerate(self._productos):
+            stock = float(p.stock_actual or 0.0)
+            minimo = float(p.stock_minimo or 0.0)
+
+            es_bajo = minimo > 0 and stock <= minimo
+
             self.table.setItem(row, 0, QTableWidgetItem(str(p.id)))
             self.table.setItem(row, 1, QTableWidgetItem(p.codigo or ""))
             self.table.setItem(row, 2, QTableWidgetItem(p.nombre or ""))
             self.table.setItem(row, 3, QTableWidgetItem(p.unidad or ""))
 
-            # Stock (col 4)
-            item_stock = QTableWidgetItem(f"{float(p.stock_actual or 0.0):.2f}")
+            # Stock
+            item_stock = QTableWidgetItem(f"{stock:.2f}")
             item_stock.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            if es_bajo:
+                font = QFont()
+                font.setBold(True)
+                item_stock.setFont(font)
+
             self.table.setItem(row, 4, item_stock)
 
-            # Precio (col 5)
+            # Precio
             precio_formateado = (
                 "${:,.2f}".format(float(p.precio_venta or 0.0))
                 .replace(",", "X")
@@ -99,8 +109,16 @@ class ProductsWindow(QWidget):
             item_precio.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.table.setItem(row, 5, item_precio)
 
-            # Activo (col 6)
+            # Activo
             self.table.setItem(row, 6, QTableWidgetItem("Sí" if p.activo else "No"))
+
+            # 🔴 Pintar fila si stock bajo
+            if es_bajo:
+                for col in range(self.table.columnCount()):
+                    item = self.table.item(row, col)
+                    if item:
+                        item.setBackground(QBrush(QColor(120, 40, 40)))
+                        item.setForeground(QBrush(QColor(240, 240, 240)))
 
         self.table.blockSignals(False)
         self.table.resizeColumnsToContents()
