@@ -3,7 +3,9 @@ from sqlalchemy.orm import declarative_base
 from datetime import datetime
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship
-
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 
 Base = declarative_base()
 
@@ -64,6 +66,26 @@ class EntryDetail(Base):
 
     entry = relationship("Entry", back_populates="details")
     product = relationship("Product")
+
+
+class CashMovement(Base):
+    __tablename__ = "cash_movements"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    tipo = Column(String, nullable=False)
+    # "INGRESO" o "EGRESO"
+
+    concepto = Column(String, nullable=False)
+
+    monto = Column(Float, nullable=False)
+
+    fecha = Column(DateTime(timezone=True), server_default=func.now())
+
+    referencia = Column(String, nullable=True)
+    # ejemplo: "Venta #5" o "Compra #3"
+
+    observacion = Column(String, nullable=True)
 
 
 class Sale(Base):

@@ -1,10 +1,48 @@
 from __future__ import annotations
 
-from app.db.database import SessionLocal
-from app.db.models import Product, Sale, SaleDetail
 from datetime import datetime
 
+from sqlalchemy.orm import joinedload
 
+from app.db.database import SessionLocal
+from app.db.models import Sale, SaleDetail, Product, CashMovement
+from sqlalchemy.orm import joinedload
+
+
+# ----------------------------
+# Consultas
+# ----------------------------
+def listar_ventas(limit: int = 200) -> list[Sale]:
+    """Lista ventas recientes (incluye flags de anulación si existen en el modelo)."""
+    with SessionLocal() as db:
+        return db.query(Sale).order_by(Sale.id.desc()).limit(limit).all()
+
+
+def obtener_venta(sale_id: int) -> Sale | None:
+    """Obtiene una venta con sus detalles."""
+    with SessionLocal() as db:
+        return (
+            db.query(Sale)
+            .options(joinedload(Sale.details))
+            .filter(Sale.id == int(sale_id))
+            .first()
+        )
+
+
+def obtener_venta_con_detalle(sale_id: int) -> Sale | None:
+    with SessionLocal() as db:
+        sale = (
+            db.query(Sale)
+            .options(joinedload(Sale.details).joinedload(SaleDetail.product))
+            .filter(Sale.id == int(sale_id))
+            .first()
+        )
+        return sale
+
+
+# ----------------------------
+# Crear venta
+# ----------------------------
 def crear_venta(items: list[dict]) -> Sale:
     """
     items = [
@@ -14,6 +52,7 @@ def crear_venta(items: list[dict]) -> Sale:
 
     Crea Sale + SaleDetail y RESTA stock_actual a Product.
     Valida stock suficiente.
+    Registra movimiento en caja (INGRESO) EN LA MISMA TRANSACCIÓN.
     """
     if not items:
         raise ValueError("La venta debe tener al menos 1 producto.")
@@ -24,7 +63,6 @@ def crear_venta(items: list[dict]) -> Sale:
 
         try:
             for it in items:
-                # Validación de entrada
                 product_id = int(it.get("product_id"))
                 cantidad = float(it.get("cantidad", 0))
                 precio_venta = float(it.get("precio_venta", 0))
@@ -37,12 +75,12 @@ def crear_venta(items: list[dict]) -> Sale:
                 product = db.query(Product).filter(Product.id == product_id).first()
                 if not product:
                     raise ValueError(f"Producto no encontrado (ID {product_id}).")
-                if not product.activo:
+                if not getattr(product, "activo", True):
                     raise ValueError(
                         f"Producto inactivo: {product.nombre}. Actívalo para venderlo."
                     )
 
-                stock = float(product.stock_actual or 0.0)
+                stock = float(getattr(product, "stock_actual", 0.0) or 0.0)
                 if stock < cantidad:
                     raise ValueError(
                         f"Stock insuficiente para '{product.nombre}'. "
@@ -58,6 +96,7 @@ def crear_venta(items: list[dict]) -> Sale:
                     subtotal=subtotal,
                 )
 
+                # Agregar detalle a la venta
                 sale.details.append(detail)
 
                 # Descontar stock
@@ -65,8 +104,30 @@ def crear_venta(items: list[dict]) -> Sale:
 
                 total += subtotal
 
-            sale.total = total
+            sale.total = float(total)
+
+            # Por compatibilidad si tu modelo Sale tiene campos de anulación
+            if hasattr(sale, "anulada"):
+                sale.anulada = False
+            if hasattr(sale, "motivo_anulacion"):
+                sale.motivo_anulacion = None
+            if hasattr(sale, "anulada_en"):
+                sale.anulada_en = None
+
             db.add(sale)
+
+            # flush -> para obtener sale.id sin cerrar transacción
+            db.flush()
+
+            # Movimiento de caja (misma transacción)
+            mov = CashMovement(
+                tipo="INGRESO",
+                concepto="Venta",
+                monto=float(sale.total),
+                referencia=f"Venta #{sale.id}",
+            )
+            db.add(mov)
+
             db.commit()
             db.refresh(sale)
             return sale
@@ -76,66 +137,66 @@ def crear_venta(items: list[dict]) -> Sale:
             raise
 
 
-from sqlalchemy.orm import joinedload
-
-
-def listar_ventas(limit: int = 200) -> list[Sale]:
-    with SessionLocal() as db:
-        return db.query(Sale).order_by(Sale.id.desc()).limit(limit).all()
-
-
-def obtener_venta_con_detalle(sale_id: int) -> Sale | None:
-    with SessionLocal() as db:
-        return (
-            db.query(Sale)
-            .options(joinedload(Sale.details).joinedload(SaleDetail.product))
-            .filter(Sale.id == sale_id)
-            .first()
-        )
-
-
-def eliminar_venta(sale_id: int) -> None:
+# ----------------------------
+# Anular venta
+# ----------------------------
+def anular_venta(sale_id: int, motivo: str | None = None) -> Sale:
     """
-    OJO: esto NO devuelve stock. (Por ahora)
-    Luego, si quieres, implementamos 'anular venta' que sí devuelve stock.
+    Anula una venta:
+    - Marca Sale.anulada = True (si existe)
+    - Guarda motivo y fecha (si existen)
+    - Devuelve stock de cada producto
+    - Registra un EGRESO en caja (devolución) en la misma transacción
+
+    Nota: si tu UI no usa esto aún, igual queda listo.
     """
     with SessionLocal() as db:
-        sale = db.query(Sale).filter(Sale.id == sale_id).first()
-        if not sale:
-            raise ValueError("Venta no encontrada.")
-        db.delete(sale)
-        db.commit()
+        try:
+            sale = (
+                db.query(Sale)
+                .options(joinedload(Sale.details))
+                .filter(Sale.id == int(sale_id))
+                .first()
+            )
+            if not sale:
+                raise ValueError("Venta no encontrada.")
 
+            # Si el modelo tiene anulada y ya está anulada
+            if hasattr(sale, "anulada") and sale.anulada:
+                raise ValueError("La venta ya está anulada.")
 
-def anular_venta(sale_id: int, motivo: str = "") -> Sale:
-    """
-    Anula una venta y devuelve stock.
-    """
-    with SessionLocal() as db:
-        sale = (
-            db.query(Sale)
-            .options(joinedload(Sale.details))
-            .filter(Sale.id == sale_id)
-            .first()
-        )
-        if not sale:
-            raise ValueError("Venta no encontrada.")
+            # Devolver stock
+            for d in sale.details:
+                product = db.query(Product).filter(Product.id == d.product_id).first()
+                if product:
+                    stock = float(getattr(product, "stock_actual", 0.0) or 0.0)
+                    product.stock_actual = stock + float(d.cantidad or 0.0)
 
-        if getattr(sale, "anulada", False):
-            raise ValueError("La venta ya está anulada.")
+            # Marcar anulación si existen campos
+            if hasattr(sale, "anulada"):
+                sale.anulada = True
+            if hasattr(sale, "motivo_anulacion"):
+                sale.motivo_anulacion = (motivo or "").strip() or None
+            if hasattr(sale, "anulada_en"):
+                sale.anulada_en = datetime.now()
 
-        # devolver stock
-        for d in sale.details:
-            product = db.query(Product).filter(Product.id == d.product_id).first()
-            if product:
-                product.stock_actual = float(product.stock_actual or 0.0) + float(
-                    d.cantidad or 0.0
-                )
+            db.add(sale)
+            db.flush()
 
-        sale.anulada = True
-        sale.motivo_anulacion = motivo.strip() or None
-        sale.anulada_en = datetime.utcnow()
+            # Registrar devolución en caja
+            mov = CashMovement(
+                tipo="EGRESO",
+                concepto="Anulación de venta",
+                monto=float(sale.total or 0.0),
+                referencia=f"Venta #{sale.id}",
+                observacion=(motivo or "").strip() or None,
+            )
+            db.add(mov)
 
-        db.commit()
-        db.refresh(sale)
-        return sale
+            db.commit()
+            db.refresh(sale)
+            return sale
+
+        except Exception:
+            db.rollback()
+            raise
