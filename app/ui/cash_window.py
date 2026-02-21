@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import date
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -24,6 +24,7 @@ from app.db.cash_repo import (
     cerrar_dia,
     esta_cerrado,
     resumen_del_dia,
+    resumen_rango,
 )
 
 
@@ -101,6 +102,10 @@ class CashWindow(QWidget):
         self.btn_export = QPushButton("Exportar PDF")
         self.btn_export.clicked.connect(self.exportar_pdf)
         top.addWidget(self.btn_export)
+
+        self.btn_excel = QPushButton("Exportar Excel")
+        self.btn_excel.clicked.connect(self.exportar_excel)
+        top.addWidget(self.btn_excel)
 
         self.btn_cierre = QPushButton("Cierre del día")
         self.btn_cierre.clicked.connect(self.cerrar_dia_ui)
@@ -190,11 +195,13 @@ class CashWindow(QWidget):
     # -------------------
     # Export PDF
     # -------------------
+
     def exportar_pdf(self):
         try:
             from reportlab.lib.pagesizes import letter
             from reportlab.pdfgen import canvas
             from reportlab.lib.units import cm
+            from PySide6.QtWidgets import QFileDialog
 
             d1, d2, tipo, q = self._get_filters()
 
@@ -207,7 +214,6 @@ class CashWindow(QWidget):
             if not path:
                 return
 
-            saldo = obtener_saldo()
             c = canvas.Canvas(path, pagesize=letter)
             w, h = letter
 
@@ -221,10 +227,52 @@ class CashWindow(QWidget):
             y -= 0.5 * cm
             c.drawString(2 * cm, y, f"Tipo: {tipo or 'TODOS'}   Buscar: {q or '-'}")
             y -= 0.5 * cm
-            c.drawString(2 * cm, y, f"Saldo actual: {_fmt_cop(saldo)}")
+
+            # Saldo global (tal como se muestra en UI)
+            c.drawString(2 * cm, y, f"{self.lbl_saldo.text()}")
             y -= 0.8 * cm
 
-            # Encabezados
+            # --------- Resumen diario (PRO) solo si es un día ---------
+            # --------- Resumen PRO ---------
+            if d1 == d2:
+                data = resumen_del_dia(d1)
+                estado = "CERRADO" if esta_cerrado(d1) else "ABIERTO"
+
+                c.setFont("Helvetica-Bold", 11)
+                c.drawString(2 * cm, y, f"Resumen del día ({d1}) - Estado: {estado}")
+                y -= 0.55 * cm
+
+                c.setFont("Helvetica", 10)
+                c.drawString(
+                    2 * cm, y, f"Saldo inicial: {_fmt_cop(data['saldo_inicial'])}"
+                )
+                y -= 0.45 * cm
+                c.drawString(2 * cm, y, f"Ingresos: {_fmt_cop(data['ingresos'])}")
+                y -= 0.45 * cm
+                c.drawString(2 * cm, y, f"Egresos: {_fmt_cop(data['egresos'])}")
+                y -= 0.45 * cm
+                c.drawString(2 * cm, y, f"Saldo final: {_fmt_cop(data['saldo_final'])}")
+                y -= 0.8 * cm
+            else:
+                data = resumen_rango(d1, d2)
+
+                c.setFont("Helvetica-Bold", 11)
+                c.drawString(2 * cm, y, f"Resumen del rango ({d1} a {d2})")
+                y -= 0.55 * cm
+
+                c.setFont("Helvetica", 10)
+                c.drawString(
+                    2 * cm, y, f"Saldo inicial: {_fmt_cop(data['saldo_inicial'])}"
+                )
+                y -= 0.45 * cm
+                c.drawString(2 * cm, y, f"Ingresos: {_fmt_cop(data['ingresos'])}")
+                y -= 0.45 * cm
+                c.drawString(2 * cm, y, f"Egresos: {_fmt_cop(data['egresos'])}")
+                y -= 0.45 * cm
+                c.drawString(2 * cm, y, f"Saldo final: {_fmt_cop(data['saldo_final'])}")
+                y -= 0.8 * cm
+
+            # Encabezados tabla
             c.setFont("Helvetica-Bold", 9)
             c.drawString(2 * cm, y, "Fecha")
             c.drawString(6.2 * cm, y, "Tipo")
@@ -238,6 +286,12 @@ class CashWindow(QWidget):
                 if y < 2 * cm:
                     c.showPage()
                     y = h - 2 * cm
+                    c.setFont("Helvetica-Bold", 9)
+                    c.drawString(2 * cm, y, "Fecha")
+                    c.drawString(6.2 * cm, y, "Tipo")
+                    c.drawString(8.2 * cm, y, "Monto")
+                    c.drawString(11.2 * cm, y, "Concepto / Ref")
+                    y -= 0.4 * cm
                     c.setFont("Helvetica", 9)
 
                 fecha_txt = ""
@@ -260,10 +314,136 @@ class CashWindow(QWidget):
 
                 y -= 0.38 * cm
 
-            c.showPage()
             c.save()
 
             QMessageBox.information(self, "OK", "PDF exportado correctamente.")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+    # -------------------
+    # EXPORTAR EXCEL
+    # -------------------
+
+    def exportar_excel(self):
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font
+            from openpyxl.utils import get_column_letter
+            from PySide6.QtWidgets import QFileDialog
+
+            d1, d2, tipo, q = self._get_filters()
+
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Guardar Excel",
+                f"caja_{d1}_a_{d2}.xlsx",
+                "Excel (*.xlsx)",
+            )
+            if not path:
+                return
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Caja"
+
+            # Encabezado general
+            ws["A1"] = "Reporte de Caja"
+            ws["A1"].font = Font(bold=True, size=14)
+
+            ws["A2"] = f"Rango: {d1} a {d2}"
+            ws["A3"] = f"Tipo: {tipo or 'TODOS'}"
+            ws["A4"] = f"Buscar: {q or '-'}"
+            ws["A5"] = self.lbl_saldo.text()
+
+            row_ptr = 7  # donde empezamos a escribir
+
+            # --------- Resumen diario (PRO) solo si es un día ---------
+            # --------- Resumen PRO ---------
+            if d1 == d2:
+                data = resumen_del_dia(d1)
+                estado = "CERRADO" if esta_cerrado(d1) else "ABIERTO"
+
+                ws[f"A{row_ptr}"] = f"Resumen del día ({d1}) - Estado: {estado}"
+                ws[f"A{row_ptr}"].font = Font(bold=True)
+                row_ptr += 1
+
+                ws[f"A{row_ptr}"] = "Saldo inicial:"
+                ws[f"B{row_ptr}"] = float(data["saldo_inicial"])
+                ws[f"B{row_ptr}"].number_format = "#,##0.00"
+                row_ptr += 1
+
+                ws[f"A{row_ptr}"] = "Ingresos:"
+                ws[f"B{row_ptr}"] = float(data["ingresos"])
+                ws[f"B{row_ptr}"].number_format = "#,##0.00"
+                row_ptr += 1
+
+                ws[f"A{row_ptr}"] = "Egresos:"
+                ws[f"B{row_ptr}"] = float(data["egresos"])
+                ws[f"B{row_ptr}"].number_format = "#,##0.00"
+                row_ptr += 1
+
+                ws[f"A{row_ptr}"] = "Saldo final:"
+                ws[f"B{row_ptr}"] = float(data["saldo_final"])
+                ws[f"B{row_ptr}"].number_format = "#,##0.00"
+                row_ptr += 2
+            else:
+                data = resumen_rango(d1, d2)
+
+                ws[f"A{row_ptr}"] = f"Resumen del rango ({d1} a {d2})"
+                ws[f"A{row_ptr}"].font = Font(bold=True)
+                row_ptr += 1
+
+                ws[f"A{row_ptr}"] = "Saldo inicial:"
+                ws[f"B{row_ptr}"] = float(data["saldo_inicial"])
+                row_ptr += 1
+
+                ws[f"A{row_ptr}"] = "Ingresos:"
+                ws[f"B{row_ptr}"] = float(data["ingresos"])
+                row_ptr += 1
+
+                ws[f"A{row_ptr}"] = "Egresos:"
+                ws[f"B{row_ptr}"] = float(data["egresos"])
+                row_ptr += 1
+
+                ws[f"A{row_ptr}"] = "Saldo final:"
+                ws[f"B{row_ptr}"] = float(data["saldo_final"])
+                row_ptr += 2
+
+            # Encabezados tabla
+            headers = [
+                "ID",
+                "Fecha",
+                "Tipo",
+                "Concepto",
+                "Monto",
+                "Referencia",
+                "Observación",
+            ]
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=row_ptr, column=col, value=header)
+                cell.font = Font(bold=True)
+            row_ptr += 1
+
+            # Datos
+            for m in self._movs:
+                ws.cell(row=row_ptr, column=1, value=int(m.id))
+                ws.cell(row=row_ptr, column=2, value=str(m.fecha))
+                ws.cell(row=row_ptr, column=3, value=m.tipo)
+                ws.cell(row=row_ptr, column=4, value=m.concepto)
+                ws.cell(row=row_ptr, column=5, value=float(m.monto or 0.0))
+                ws.cell(row=row_ptr, column=5).number_format = "#,##0.00"
+                ws.cell(row=row_ptr, column=6, value=m.referencia or "")
+                ws.cell(row=row_ptr, column=7, value=m.observacion or "")
+                row_ptr += 1
+
+            # Ajustes de ancho columnas
+            widths = [10, 20, 12, 30, 14, 18, 30]
+            for i, w in enumerate(widths, 1):
+                ws.column_dimensions[get_column_letter(i)].width = w
+
+            wb.save(path)
+            QMessageBox.information(self, "OK", "Excel exportado correctamente.")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))

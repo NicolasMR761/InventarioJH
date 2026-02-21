@@ -252,3 +252,45 @@ def cerrar_dia(d: date, cerrado_por: str | None = None) -> CashClosure:
         db.commit()
         db.refresh(c)
         return c
+
+
+def resumen_rango(d1: date, d2: date) -> dict:
+    """
+    Resumen de un rango de fechas (incluye días completos).
+    - saldo_inicial: saldo justo antes de d1
+    - ingresos/egresos: sumas del rango
+    - saldo_final: saldo_inicial + ingresos - egresos
+    """
+    if d2 < d1:
+        d1, d2 = d2, d1
+
+    start = datetime.combine(d1, time.min)
+    end = datetime.combine(d2, time.max)
+
+    with SessionLocal() as db:
+        ingresos = (
+            db.query(func.coalesce(func.sum(CashMovement.monto), 0.0))
+            .filter(CashMovement.tipo == "INGRESO")
+            .filter(CashMovement.fecha >= start, CashMovement.fecha <= end)
+            .scalar()
+        )
+        egresos = (
+            db.query(func.coalesce(func.sum(CashMovement.monto), 0.0))
+            .filter(CashMovement.tipo == "EGRESO")
+            .filter(CashMovement.fecha >= start, CashMovement.fecha <= end)
+            .scalar()
+        )
+
+    saldo_inicial = obtener_saldo(hasta=start - timedelta(seconds=1))
+    ingresos = float(ingresos or 0.0)
+    egresos = float(egresos or 0.0)
+    saldo_final = float(saldo_inicial) + ingresos - egresos
+
+    return {
+        "desde": d1,
+        "hasta": d2,
+        "ingresos": ingresos,
+        "egresos": egresos,
+        "saldo_inicial": float(saldo_inicial),
+        "saldo_final": float(saldo_final),
+    }
