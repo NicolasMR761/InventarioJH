@@ -103,3 +103,16 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self, "Error", f"No se pudo crear el backup:\n{str(e)}"
             )
+
+    def closeEvent(self, event):
+        """
+        Backup automático al cerrar el sistema.
+        No muestra mensajes para no molestar al usuario.
+        """
+        try:
+            ruta_db = get_app_data_dir() / "inventario.db"
+            crear_backup(str(ruta_db))
+        except Exception:
+            pass
+
+        event.accept()

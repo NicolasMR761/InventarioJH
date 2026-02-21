@@ -1,8 +1,8 @@
 from pathlib import Path
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from app.db.models import Base
-
+from sqlalchemy.engine import Engine
 
 from pathlib import Path
 
@@ -26,6 +26,15 @@ def get_engine():
 
 engine = get_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON;")
+    cursor.execute("PRAGMA journal_mode=WAL;")
+    cursor.execute("PRAGMA synchronous=NORMAL;")
+    cursor.close()
 
 
 def init_db():
