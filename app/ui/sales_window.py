@@ -22,6 +22,7 @@ from app.db.sales_repo import (
     obtener_venta_con_detalle,
     anular_venta,
 )
+from app.utils.formatters import fmt_fecha
 
 
 class SalesWindow(QWidget):
@@ -149,7 +150,7 @@ class SalesWindow(QWidget):
             self.tbl_hist.insertRow(row)
 
             self.tbl_hist.setItem(row, 0, QTableWidgetItem(str(s.id)))
-            self.tbl_hist.setItem(row, 1, QTableWidgetItem(str(s.fecha)))
+            self.tbl_hist.setItem(row, 1, QTableWidgetItem(fmt_fecha(s.fecha)))
 
             estado = " (ANULADA)" if getattr(s, "anulada", False) else ""
             self.tbl_hist.setItem(

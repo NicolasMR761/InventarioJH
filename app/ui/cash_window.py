@@ -27,6 +27,7 @@ from app.db.cash_repo import (
     resumen_rango,
 )
 from app.ui.cash_form import CashForm
+from app.utils.formatters import fmt_fecha
 
 
 def _fmt_cop(value: float) -> str:
@@ -226,7 +227,7 @@ class CashWindow(QWidget):
                 fecha_txt = ""
                 if getattr(m, "fecha", None):
                     try:
-                        fecha_txt = m.fecha.strftime("%Y-%m-%d %H:%M")
+                        fecha_txt = fmt_fecha(m.fecha)
                     except Exception:
                         fecha_txt = str(m.fecha)
 
@@ -353,7 +354,7 @@ class CashWindow(QWidget):
                 fecha_txt = ""
                 if getattr(m, "fecha", None):
                     try:
-                        fecha_txt = m.fecha.strftime("%Y-%m-%d %H:%M")
+                        fecha_txt = fmt_fecha(m.fecha)
                     except Exception:
                         fecha_txt = str(m.fecha)
 
@@ -484,7 +485,7 @@ class CashWindow(QWidget):
             # Datos
             for m in self._movs:
                 ws.cell(row=row_ptr, column=1, value=int(m.id))
-                ws.cell(row=row_ptr, column=2, value=str(m.fecha))
+                ws.cell(row=row_ptr, column=2, value=fmt_fecha(m.fecha))
                 ws.cell(row=row_ptr, column=3, value=m.tipo)
                 ws.cell(row=row_ptr, column=4, value=m.concepto)
                 ws.cell(row=row_ptr, column=5, value=float(m.monto or 0.0))
