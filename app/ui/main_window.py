@@ -40,17 +40,13 @@ class DashboardTile(QFrame):
 
         lbl_t = QLabel(title)
         lbl_t.setObjectName("tileTitle")
-        lbl_t.setAttribute(
-            Qt.WA_TransparentForMouseEvents, True
-        )  # ✅ deja pasar el click
+        lbl_t.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # deja pasar el click
         lay.addWidget(lbl_t)
 
         lbl_d = QLabel(desc)
         lbl_d.setObjectName("tileDesc")
         lbl_d.setWordWrap(True)
-        lbl_d.setAttribute(
-            Qt.WA_TransparentForMouseEvents, True
-        )  # ✅ deja pasar el click
+        lbl_d.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # deja pasar el click
         lay.addWidget(lbl_d)
 
         lay.addStretch(1)
@@ -198,12 +194,20 @@ class MainWindow(QMainWindow):
         return card
 
     def _apply_styles(self):
+        # 🔒 Blindaje: fuerza colores aunque Windows intente sobreescribir (alto contraste/tema)
         self.setStyleSheet(
             """
+            /* Fuerza color global para evitar letras negras en algunos PCs */
+            QWidget {
+                color: #e2e8f0;
+                font-size: 14px;
+            }
+            QLabel {
+                color: #e2e8f0;
+            }
+
             #root {
                 background: #0f172a; /* slate-900 */
-                color: #e2e8f0;      /* slate-200 */
-                font-size: 14px;
             }
 
             #card, #tile {
