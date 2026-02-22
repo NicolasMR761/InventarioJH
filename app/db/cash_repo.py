@@ -18,6 +18,60 @@ def _dt_range(d: date):
     return start, end
 
 
+def _to_dt_start(x) -> datetime | None:
+    """Convierte date/datetime -> datetime (inicio de día)."""
+    if x is None:
+        return None
+    if isinstance(x, datetime):
+        return x
+    if isinstance(x, date):
+        return datetime.combine(x, time.min)
+    return None
+
+
+def _to_dt_end(x) -> datetime | None:
+    """Convierte date/datetime -> datetime (fin de día)."""
+    if x is None:
+        return None
+    if isinstance(x, datetime):
+        return x
+    if isinstance(x, date):
+        return datetime.combine(x, time.max)
+    return None
+
+
+def _apply_filters(
+    query,
+    fecha_desde=None,
+    fecha_hasta=None,
+    tipo: str | None = None,
+    q: str | None = None,
+):
+    """Aplica filtros consistentes (se usa en listar/contar)."""
+    d1 = _to_dt_start(fecha_desde)
+    d2 = _to_dt_end(fecha_hasta)
+
+    if d1 is not None:
+        query = query.filter(CashMovement.fecha >= d1)
+    if d2 is not None:
+        query = query.filter(CashMovement.fecha <= d2)
+
+    if tipo and tipo.strip():
+        query = query.filter(CashMovement.tipo == tipo.strip().upper())
+
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                CashMovement.concepto.ilike(term),
+                CashMovement.referencia.ilike(term),
+                CashMovement.observacion.ilike(term),
+            )
+        )
+
+    return query
+
+
 # ----------------------------
 # Cierres
 # ----------------------------
@@ -60,44 +114,37 @@ def obtener_saldo(hasta: datetime | None = None) -> float:
 
 
 def listar_movimientos(
-    limit: int = 300,
-    fecha_desde: date | None = None,
-    fecha_hasta: date | None = None,
+    limit: int = 200,
+    offset: int = 0,
+    fecha_desde: date | datetime | None = None,
+    fecha_hasta: date | datetime | None = None,
     tipo: str | None = None,
     q: str | None = None,
 ) -> list[CashMovement]:
     """
-    Lista movimientos con filtros:
-    - rango de fechas por día (fecha_desde/fecha_hasta)
+    Lista movimientos con filtros + paginación:
+    - fecha_desde/fecha_hasta: date o datetime
     - tipo: INGRESO/EGRESO
-    - q: texto que busca en concepto/referencia/observacion
+    - q: texto (concepto/referencia/observacion)
+    - offset/limit: paginación
     """
     with SessionLocal() as db:
+        query = db.query(CashMovement).order_by(CashMovement.id.desc())
+        query = _apply_filters(query, fecha_desde, fecha_hasta, tipo, q)
+        return query.offset(int(offset)).limit(int(limit)).all()
+
+
+def contar_movimientos(
+    fecha_desde: date | datetime | None = None,
+    fecha_hasta: date | datetime | None = None,
+    tipo: str | None = None,
+    q: str | None = None,
+) -> int:
+    """Cuenta movimientos con los mismos filtros de listar_movimientos."""
+    with SessionLocal() as db:
         query = db.query(CashMovement)
-
-        if fecha_desde:
-            query = query.filter(
-                CashMovement.fecha >= datetime.combine(fecha_desde, time.min)
-            )
-        if fecha_hasta:
-            query = query.filter(
-                CashMovement.fecha <= datetime.combine(fecha_hasta, time.max)
-            )
-
-        if tipo and tipo.strip():
-            query = query.filter(CashMovement.tipo == tipo.strip().upper())
-
-        if q and q.strip():
-            term = f"%{q.strip()}%"
-            query = query.filter(
-                or_(
-                    CashMovement.concepto.ilike(term),
-                    CashMovement.referencia.ilike(term),
-                    CashMovement.observacion.ilike(term),
-                )
-            )
-
-        return query.order_by(CashMovement.id.desc()).limit(limit).all()
+        query = _apply_filters(query, fecha_desde, fecha_hasta, tipo, q)
+        return int(query.count())
 
 
 # ----------------------------
@@ -213,7 +260,6 @@ def resumen_del_dia(d: date) -> dict:
             .scalar()
         )
 
-    # saldo inicial: saldo hasta el día anterior
     saldo_inicial = obtener_saldo(
         hasta=datetime.combine(d, time.min) - timedelta(seconds=1)
     )
@@ -231,9 +277,7 @@ def resumen_del_dia(d: date) -> dict:
 
 
 def cerrar_dia(d: date, cerrado_por: str | None = None) -> CashClosure:
-    """
-    Crea un cierre diario. Si ya existe, error.
-    """
+    """Crea un cierre diario. Si ya existe, error."""
     if esta_cerrado(d):
         raise ValueError(f"El día {d} ya está cerrado.")
 

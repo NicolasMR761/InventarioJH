@@ -5,8 +5,17 @@ from datetime import datetime
 from sqlalchemy.orm import joinedload
 
 from app.db.database import SessionLocal
-from app.db.models import Sale, SaleDetail, Product, CashMovement
+from app.db.models import Sale, SaleDetail, Product
 from app.db.cash_repo import registrar_movimiento_en_db
+
+
+def _fmt_cop(value: float) -> str:
+    """Formatea a pesos COP estilo $5.000 (sin decimales)."""
+    try:
+        n = int(round(float(value)))
+    except Exception:
+        n = 0
+    return "$" + f"{n:,}".replace(",", ".")
 
 
 # ----------------------------
@@ -65,6 +74,9 @@ def crear_venta(items: list[dict], metodo_pago: str = "Efectivo") -> Sale:
         sale = Sale(total=0.0)
         total = 0.0
 
+        # ✅ Detalle para caja: una línea por producto
+        detalle_lineas: list[str] = []
+
         try:
             for it in items:
                 product_id = int(it.get("product_id"))
@@ -99,13 +111,22 @@ def crear_venta(items: list[dict], metodo_pago: str = "Efectivo") -> Sale:
                     precio_venta=precio_venta,
                     subtotal=subtotal,
                 )
-
                 sale.details.append(detail)
 
                 # Descontar stock
                 product.stock_actual = stock - cantidad
 
                 total += subtotal
+
+                # ✅ Detalle para caja (una línea)
+                cant_txt = (
+                    f"{int(cantidad)}"
+                    if float(cantidad).is_integer()
+                    else f"{cantidad:g}"
+                )
+                detalle_lineas.append(
+                    f"{product.nombre} x{cant_txt} a {_fmt_cop(precio_venta)} c/u"
+                )
 
             sale.total = float(total)
 
@@ -120,6 +141,14 @@ def crear_venta(items: list[dict], metodo_pago: str = "Efectivo") -> Sale:
             db.add(sale)
             db.flush()  # para obtener sale.id
 
+            # ✅ Observación final: productos en líneas + método en otra línea
+            observacion = "\n".join(detalle_lineas).strip() if detalle_lineas else None
+            if metodo_pago:
+                if observacion:
+                    observacion += f"\nMétodo: {metodo_pago}"
+                else:
+                    observacion = f"Método: {metodo_pago}"
+
             # Movimiento de caja (misma transacción)
             registrar_movimiento_en_db(
                 db,
@@ -127,7 +156,7 @@ def crear_venta(items: list[dict], metodo_pago: str = "Efectivo") -> Sale:
                 concepto="Venta",
                 monto=float(sale.total),
                 referencia=f"Venta #{sale.id}",
-                observacion=f"Método: {metodo_pago}" if metodo_pago else None,
+                observacion=observacion,
             )
 
             db.commit()
@@ -151,8 +180,6 @@ def anular_venta(
     - Guarda motivo y fecha (si existen)
     - Devuelve stock de cada producto
     - Registra un EGRESO en caja (devolución) en la misma transacción
-
-    metodo_pago (opcional): si lo pasas, queda en observación junto con el motivo.
     """
     metodo_pago = (metodo_pago or "").strip() or None
     motivo_txt = (motivo or "").strip() or None
@@ -189,12 +216,13 @@ def anular_venta(
             db.add(sale)
             db.flush()
 
+            # ✅ Observación anulación: en líneas (más legible)
             obs_parts = []
             if metodo_pago:
                 obs_parts.append(f"Método: {metodo_pago}")
             if motivo_txt:
                 obs_parts.append(f"Motivo: {motivo_txt}")
-            obs = " | ".join(obs_parts) if obs_parts else None
+            obs = "\n".join(obs_parts).strip() if obs_parts else None
 
             registrar_movimiento_en_db(
                 db,

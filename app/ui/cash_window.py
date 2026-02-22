@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
-
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -13,8 +11,11 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QLineEdit,
     QComboBox,
-    QFileDialog,
     QDateEdit,
+    QTextEdit,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
 )
 from PySide6.QtCore import Qt, QDate
 
@@ -25,6 +26,7 @@ from app.db.cash_repo import (
     esta_cerrado,
     resumen_del_dia,
     resumen_rango,
+    contar_movimientos,
 )
 from app.ui.cash_form import CashForm
 from app.utils.formatters import fmt_fecha
@@ -44,10 +46,15 @@ class CashWindow(QWidget):
         self.setWindowTitle("Caja")
         self.resize(1050, 600)
 
+        # ✅ Paginación
+        self.page_size = 50
+        self.offset = 0
+        self.total_count = 0
+
         layout = QVBoxLayout(self)
 
         # -------------------
-        # Filtros (fecha, tipo, buscar)
+        # Filtros
         # -------------------
         filters = QHBoxLayout()
 
@@ -75,11 +82,11 @@ class CashWindow(QWidget):
         filters.addWidget(self.txt_buscar, 2)
 
         btn_aplicar = QPushButton("Aplicar")
-        btn_aplicar.clicked.connect(self.cargar)
+        btn_aplicar.clicked.connect(lambda: self.cargar(reset_offset=True))
         filters.addWidget(btn_aplicar)
 
         btn_refrescar = QPushButton("Refrescar")
-        btn_refrescar.clicked.connect(self.cargar)
+        btn_refrescar.clicked.connect(lambda: self.cargar(reset_offset=False))
         filters.addWidget(btn_refrescar)
 
         layout.addLayout(filters)
@@ -119,7 +126,9 @@ class CashWindow(QWidget):
 
         layout.addLayout(top)
 
-        # Barra superior de acciones (debajo del título o arriba de la tabla)
+        # -------------------
+        # Acciones ingreso/egreso manual
+        # -------------------
         actions = QHBoxLayout()
 
         self.btn_ingreso = QPushButton("Nuevo Ingreso")
@@ -140,33 +149,34 @@ class CashWindow(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Fecha", "Tipo", "Concepto", "Monto", "Referencia", "Observación"]
+            ["ID", "Fecha", "Tipo", "Concepto", "Monto", "Referencia", "Detalle"]
         )
         self.table.setSortingEnabled(True)
         layout.addWidget(self.table)
 
+        # -------------------
+        # Paginación
+        # -------------------
+        pager = QHBoxLayout()
+
+        self.btn_prev = QPushButton("« Anterior")
+        self.btn_prev.clicked.connect(self.pagina_anterior)
+        pager.addWidget(self.btn_prev)
+
+        self.lbl_pager = QLabel("Mostrando 0–0 de 0")
+        pager.addWidget(self.lbl_pager)
+
+        self.btn_next = QPushButton("Siguiente »")
+        self.btn_next.clicked.connect(self.pagina_siguiente)
+        pager.addWidget(self.btn_next)
+
+        pager.addStretch()
+        layout.addLayout(pager)
+
         self._movs = []
-        self.cargar()
+        self.cargar(reset_offset=True)
 
-    # ---------------- MÉTODOS DE VENTANA ----------------
-
-    def abrir_ingreso(self):
-        form = CashForm(tipo="INGRESO", parent=self)
-        # Si CashForm es QDialog, esto funciona perfecto:
-        if hasattr(form, "exec"):
-            if form.exec():
-                self.cargar()
-        else:
-            # Si CashForm fuera QWidget (raro), lo mostramos y recargamos al cerrar manualmente después
-            form.show()
-
-    def abrir_egreso(self):
-        form = CashForm(tipo="EGRESO", parent=self)
-        if hasattr(form, "exec"):
-            if form.exec():
-                self.cargar()
-        else:
-            form.show()
+    # ---------------- MÉTODOS ----------------
 
     def _get_filters(self):
         d1 = self.dt_desde.date().toPython()
@@ -179,21 +189,102 @@ class CashWindow(QWidget):
         q = (self.txt_buscar.text() or "").strip() or None
         return d1, d2, tipo, q
 
-    def cargar(self):
+    def _mov_by_id(self, mov_id: int):
+        for m in self._movs:
+            if int(getattr(m, "id", 0)) == int(mov_id):
+                return m
+        return None
+
+    def ver_detalle_por_id(self, mov_id: int) -> None:
+        m = self._mov_by_id(mov_id)
+        if not m:
+            QMessageBox.information(self, "Detalle", "No se encontró el movimiento.")
+            return
+
+        fecha_txt = ""
+        if getattr(m, "fecha", None):
+            try:
+                fecha_txt = m.fecha.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                fecha_txt = str(m.fecha)
+
+        detalle = (
+            f"ID: {m.id}\n"
+            f"Fecha: {fecha_txt}\n"
+            f"Tipo: {m.tipo or ''}\n"
+            f"Concepto: {m.concepto or ''}\n"
+            f"Monto: {_fmt_cop(m.monto or 0.0)}\n"
+            f"Referencia: {m.referencia or ''}\n"
+            f"Observación:\n{m.observacion or ''}"
+        )
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Detalle del movimiento")
+        dlg.resize(520, 360)
+
+        lay = QVBoxLayout(dlg)
+
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setPlainText(detalle)
+        lay.addWidget(txt)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(dlg.reject)
+        buttons.accepted.connect(dlg.accept)
+        lay.addWidget(buttons)
+
+        dlg.exec()
+
+    def abrir_ingreso(self):
+        form = CashForm(tipo="INGRESO", parent=self)
+        if hasattr(form, "exec"):
+            if form.exec():
+                self.cargar(reset_offset=False)
+        else:
+            form.show()
+
+    def abrir_egreso(self):
+        form = CashForm(tipo="EGRESO", parent=self)
+        if hasattr(form, "exec"):
+            if form.exec():
+                self.cargar(reset_offset=False)
+        else:
+            form.show()
+
+    def pagina_anterior(self):
+        self.offset = max(0, self.offset - self.page_size)
+        self.cargar(reset_offset=False)
+
+    def pagina_siguiente(self):
+        if self.offset + self.page_size < self.total_count:
+            self.offset += self.page_size
+        self.cargar(reset_offset=False)
+
+    def _update_pager_ui(self):
+        shown = len(self._movs)
+        start = 0 if self.total_count == 0 else self.offset + 1
+        end = self.offset + shown
+
+        self.lbl_pager.setText(f"Mostrando {start}–{end} de {self.total_count}")
+        self.btn_prev.setEnabled(self.offset > 0)
+        self.btn_next.setEnabled(self.offset + self.page_size < self.total_count)
+
+    def cargar(self, reset_offset: bool = False):
         try:
+            if reset_offset:
+                self.offset = 0
+
             d1, d2, tipo, q = self._get_filters()
 
-            # Estado cierre del día (solo informativo)
             if d1 == d2 and esta_cerrado(d1):
                 self.lbl_estado.setText(f"🧾 Día {d1} CERRADO")
             else:
                 self.lbl_estado.setText("")
 
-            # saldo total (global)
             saldo = obtener_saldo()
             self.lbl_saldo.setText(f"Saldo: {_fmt_cop(saldo)}")
 
-            # Resumen del rango (o día) según filtros
             if d1 == d2:
                 data = resumen_del_dia(d1)
                 ingresos = float(data["ingresos"] or 0.0)
@@ -204,13 +295,20 @@ class CashWindow(QWidget):
                 egresos = float(data["egresos"] or 0.0)
 
             balance = ingresos - egresos
-
             self.lbl_resumen.setText(
                 f"Balance: {_fmt_cop(balance)}  |  Ingresos: {_fmt_cop(ingresos)}  |  Egresos: {_fmt_cop(egresos)}"
             )
 
+            self.total_count = contar_movimientos(
+                fecha_desde=d1,
+                fecha_hasta=d2,
+                tipo=tipo,
+                q=q,
+            )
+
             self._movs = listar_movimientos(
-                limit=1000,
+                limit=self.page_size,
+                offset=self.offset,
                 fecha_desde=d1,
                 fecha_hasta=d2,
                 tipo=tipo,
@@ -241,24 +339,44 @@ class CashWindow(QWidget):
                 self.table.setItem(row, 4, it_m)
 
                 self.table.setItem(row, 5, QTableWidgetItem(m.referencia or ""))
-                self.table.setItem(row, 6, QTableWidgetItem(m.observacion or ""))
+
+                # ✅ FIX: congelar mov_id con parámetro por defecto
+                mov_id = int(m.id)
+                btn = QPushButton("Ver detalle")
+                btn.clicked.connect(
+                    lambda _=False, mid=mov_id: self.ver_detalle_por_id(mid)
+                )
+                self.table.setCellWidget(row, 6, btn)
 
             self.table.blockSignals(False)
             self.table.setSortingEnabled(was_sort)
+
+            self._update_pager_ui()
 
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
 
     # -------------------
-    # Export PDF
+    # Exportar TODO el rango filtrado
     # -------------------
+
+    def _movs_para_exportar(self):
+        """Trae TODOS los movimientos del rango filtrado (ignora paginación)."""
+        d1, d2, tipo, q = self._get_filters()
+        return listar_movimientos(
+            limit=200000,  # número alto; si crece muchísimo luego lo hacemos por bloques
+            offset=0,
+            fecha_desde=d1,
+            fecha_hasta=d2,
+            tipo=tipo,
+            q=q,
+        )
 
     def exportar_pdf(self):
         try:
             from reportlab.lib.pagesizes import letter
             from reportlab.pdfgen import canvas
             from reportlab.lib.units import cm
-            from PySide6.QtWidgets import QFileDialog
 
             d1, d2, tipo, q = self._get_filters()
 
@@ -270,6 +388,8 @@ class CashWindow(QWidget):
             )
             if not path:
                 return
+
+            movs = self._movs_para_exportar()
 
             c = canvas.Canvas(path, pagesize=letter)
             w, h = letter
@@ -285,12 +405,9 @@ class CashWindow(QWidget):
             c.drawString(2 * cm, y, f"Tipo: {tipo or 'TODOS'}   Buscar: {q or '-'}")
             y -= 0.5 * cm
 
-            # Saldo global (tal como se muestra en UI)
             c.drawString(2 * cm, y, f"{self.lbl_saldo.text()}")
             y -= 0.8 * cm
 
-            # --------- Resumen diario (PRO) solo si es un día ---------
-            # --------- Resumen PRO ---------
             if d1 == d2:
                 data = resumen_del_dia(d1)
                 estado = "CERRADO" if esta_cerrado(d1) else "ABIERTO"
@@ -339,7 +456,7 @@ class CashWindow(QWidget):
 
             c.setFont("Helvetica", 9)
 
-            for m in self._movs:
+            for m in movs:
                 if y < 2 * cm:
                     c.showPage()
                     y = h - 2 * cm
@@ -351,12 +468,10 @@ class CashWindow(QWidget):
                     y -= 0.4 * cm
                     c.setFont("Helvetica", 9)
 
-                fecha_txt = ""
-                if getattr(m, "fecha", None):
-                    try:
-                        fecha_txt = fmt_fecha(m.fecha)
-                    except Exception:
-                        fecha_txt = str(m.fecha)
+                try:
+                    fecha_txt = fmt_fecha(m.fecha)
+                except Exception:
+                    fecha_txt = str(getattr(m, "fecha", ""))
 
                 concepto = (m.concepto or "").strip()
                 ref = (m.referencia or "").strip()
@@ -364,7 +479,7 @@ class CashWindow(QWidget):
                 if ref:
                     line += f" ({ref})"
 
-                c.drawString(2 * cm, y, fecha_txt[:16])
+                c.drawString(2 * cm, y, str(fecha_txt)[:16])
                 c.drawString(6.2 * cm, y, (m.tipo or "")[:10])
                 c.drawRightString(10.8 * cm, y, _fmt_cop(m.monto or 0.0))
                 c.drawString(11.2 * cm, y, line[:60])
@@ -372,22 +487,16 @@ class CashWindow(QWidget):
                 y -= 0.38 * cm
 
             c.save()
-
             QMessageBox.information(self, "OK", "PDF exportado correctamente.")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
-
-    # -------------------
-    # EXPORTAR EXCEL
-    # -------------------
 
     def exportar_excel(self):
         try:
             from openpyxl import Workbook
             from openpyxl.styles import Font
             from openpyxl.utils import get_column_letter
-            from PySide6.QtWidgets import QFileDialog
 
             d1, d2, tipo, q = self._get_filters()
 
@@ -400,11 +509,12 @@ class CashWindow(QWidget):
             if not path:
                 return
 
+            movs = self._movs_para_exportar()
+
             wb = Workbook()
             ws = wb.active
             ws.title = "Caja"
 
-            # Encabezado general
             ws["A1"] = "Reporte de Caja"
             ws["A1"].font = Font(bold=True, size=14)
 
@@ -413,10 +523,8 @@ class CashWindow(QWidget):
             ws["A4"] = f"Buscar: {q or '-'}"
             ws["A5"] = self.lbl_saldo.text()
 
-            row_ptr = 7  # donde empezamos a escribir
+            row_ptr = 7
 
-            # --------- Resumen diario (PRO) solo si es un día ---------
-            # --------- Resumen PRO ---------
             if d1 == d2:
                 data = resumen_del_dia(d1)
                 estado = "CERRADO" if esta_cerrado(d1) else "ABIERTO"
@@ -453,21 +561,24 @@ class CashWindow(QWidget):
 
                 ws[f"A{row_ptr}"] = "Saldo inicial:"
                 ws[f"B{row_ptr}"] = float(data["saldo_inicial"])
+                ws[f"B{row_ptr}"].number_format = "#,##0.00"
                 row_ptr += 1
 
                 ws[f"A{row_ptr}"] = "Ingresos:"
                 ws[f"B{row_ptr}"] = float(data["ingresos"])
+                ws[f"B{row_ptr}"].number_format = "#,##0.00"
                 row_ptr += 1
 
                 ws[f"A{row_ptr}"] = "Egresos:"
                 ws[f"B{row_ptr}"] = float(data["egresos"])
+                ws[f"B{row_ptr}"].number_format = "#,##0.00"
                 row_ptr += 1
 
                 ws[f"A{row_ptr}"] = "Saldo final:"
                 ws[f"B{row_ptr}"] = float(data["saldo_final"])
+                ws[f"B{row_ptr}"].number_format = "#,##0.00"
                 row_ptr += 2
 
-            # Encabezados tabla
             headers = [
                 "ID",
                 "Fecha",
@@ -482,8 +593,7 @@ class CashWindow(QWidget):
                 cell.font = Font(bold=True)
             row_ptr += 1
 
-            # Datos
-            for m in self._movs:
+            for m in movs:
                 ws.cell(row=row_ptr, column=1, value=int(m.id))
                 ws.cell(row=row_ptr, column=2, value=fmt_fecha(m.fecha))
                 ws.cell(row=row_ptr, column=3, value=m.tipo)
@@ -494,7 +604,6 @@ class CashWindow(QWidget):
                 ws.cell(row=row_ptr, column=7, value=m.observacion or "")
                 row_ptr += 1
 
-            # Ajustes de ancho columnas
             widths = [10, 20, 12, 30, 14, 18, 30]
             for i, w in enumerate(widths, 1):
                 ws.column_dimensions[get_column_letter(i)].width = w
@@ -505,9 +614,6 @@ class CashWindow(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-    # -------------------
-    # Cierre diario
-    # -------------------
     def cerrar_dia_ui(self):
         try:
             d = self.dt_desde.date().toPython()
@@ -524,7 +630,6 @@ class CashWindow(QWidget):
                 QMessageBox.information(self, "Cierre", f"El día {d} ya está cerrado.")
                 return
 
-            # Mostrar resumen antes de cerrar
             data = resumen_del_dia(d)
             msg = (
                 f"Cierre del día: {d}\n\n"
@@ -540,7 +645,7 @@ class CashWindow(QWidget):
 
             cerrar_dia(d, cerrado_por=None)
             QMessageBox.information(self, "OK", f"Día {d} cerrado.")
-            self.cargar()
+            self.cargar(reset_offset=False)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))

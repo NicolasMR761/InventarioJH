@@ -15,7 +15,6 @@ from PySide6.QtCore import Qt
 from app.db.entries_repo import crear_entrada
 from app.db.products_repo import listar_productos
 from app.db.suppliers_repo import listar_proveedores
-from app.db.cash_repo import registrar_movimiento
 
 
 class EntriesWindow(QWidget):
@@ -61,6 +60,10 @@ class EntriesWindow(QWidget):
         pago.addStretch()
         layout.addLayout(pago)
 
+        # ✅ NUEVO: deshabilitar método cuando NO está pagado
+        self.chk_pagado.toggled.connect(self._toggle_metodo_pago)
+        self._toggle_metodo_pago(self.chk_pagado.isChecked())
+
         # --- Tabla detalle ---
         self.table = QTableWidget()
         self.table.setColumnCount(4)
@@ -90,6 +93,10 @@ class EntriesWindow(QWidget):
         self.agregar_fila()
 
         self.table.cellChanged.connect(self.recalcular_totales)
+
+    # ✅ NUEVO
+    def _toggle_metodo_pago(self, checked: bool):
+        self.cbo_metodo.setEnabled(bool(checked))
 
     def cargar_data(self):
         # Solo activos para entradas
@@ -185,7 +192,8 @@ class EntriesWindow(QWidget):
             subtotal = max(cantidad, 0.0) * max(precio, 0.0)
             total += subtotal
 
-            item = QTableWidgetItem(f"{subtotal:.2f}")
+            # ✅ CAMBIO: mostrar subtotal con formato de dinero
+            item = QTableWidgetItem(self._fmt_money(subtotal))
             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row, 3, item)
 
@@ -257,23 +265,6 @@ class EntriesWindow(QWidget):
                 pagado=self.chk_pagado.isChecked(),
                 metodo_pago=self.cbo_metodo.currentText(),
             )
-
-            # 2) Si está pagado, registra EGRESO en Caja
-            if self.chk_pagado.isChecked():
-                metodo = self.cbo_metodo.currentText()
-                proveedor_txt = self.cbo_supplier.currentText()
-
-                concepto = f"Compra (Entrada #{entry.id})"
-                if proveedor_txt:
-                    concepto += f" - {proveedor_txt}"
-
-                registrar_movimiento(
-                    tipo="EGRESO",
-                    concepto=concepto,
-                    monto=float(entry.total or total),
-                    referencia=f"Entrada {entry.id}",
-                    observacion=f"Método: {metodo}",
-                )
 
             # 3) UX
             msg = f"Entrada #{entry.id} guardada. Stock actualizado."
