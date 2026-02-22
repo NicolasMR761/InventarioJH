@@ -26,6 +26,7 @@ from app.db.cash_repo import (
     resumen_del_dia,
     resumen_rango,
 )
+from app.ui.cash_form import CashForm
 
 
 def _fmt_cop(value: float) -> str:
@@ -117,6 +118,21 @@ class CashWindow(QWidget):
 
         layout.addLayout(top)
 
+        # Barra superior de acciones (debajo del título o arriba de la tabla)
+        actions = QHBoxLayout()
+
+        self.btn_ingreso = QPushButton("Nuevo Ingreso")
+        self.btn_egreso = QPushButton("Nuevo Egreso")
+
+        self.btn_ingreso.clicked.connect(self.abrir_ingreso)
+        self.btn_egreso.clicked.connect(self.abrir_egreso)
+
+        actions.addWidget(self.btn_ingreso)
+        actions.addWidget(self.btn_egreso)
+        actions.addStretch()
+
+        layout.addLayout(actions)
+
         # -------------------
         # Tabla
         # -------------------
@@ -130,6 +146,26 @@ class CashWindow(QWidget):
 
         self._movs = []
         self.cargar()
+
+    # ---------------- MÉTODOS DE VENTANA ----------------
+
+    def abrir_ingreso(self):
+        form = CashForm(tipo="INGRESO", parent=self)
+        # Si CashForm es QDialog, esto funciona perfecto:
+        if hasattr(form, "exec"):
+            if form.exec():
+                self.cargar()
+        else:
+            # Si CashForm fuera QWidget (raro), lo mostramos y recargamos al cerrar manualmente después
+            form.show()
+
+    def abrir_egreso(self):
+        form = CashForm(tipo="EGRESO", parent=self)
+        if hasattr(form, "exec"):
+            if form.exec():
+                self.cargar()
+        else:
+            form.show()
 
     def _get_filters(self):
         d1 = self.dt_desde.date().toPython()
