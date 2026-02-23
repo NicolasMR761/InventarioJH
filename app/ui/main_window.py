@@ -159,7 +159,7 @@ class MainWindow(QMainWindow):
             0,
         )
         grid.addWidget(
-            self._make_tile("📊 Reportes", "Próximamente", self._prox),
+            self._make_tile("📒 Kardex", "Movimientos por producto", self.abrir_kardex),
             2,
             1,
         )
@@ -353,6 +353,12 @@ class MainWindow(QMainWindow):
 
         self.win_caja = CashWindow()
         self.win_caja.show()
+
+    def abrir_kardex(self):
+        from app.ui.kardex_window import KardexWindow
+
+        self.win_kardex = KardexWindow()
+        self.win_kardex.show()
 
     def _prox(self):
         QMessageBox.information(

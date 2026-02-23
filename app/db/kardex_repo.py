@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+from app.db.database import SessionLocal
+from app.db.models import Entry, EntryDetail, Sale, SaleDetail, Supplier
+
+
+@dataclass
+class KardexRow:
+    fecha: datetime
+    tipo: str  # ENTRADA | VENTA | ANULACION
+    referencia: str  # "Compra #3 (Proveedor)" | "Venta #10"
+    cantidad: float  # + entra, - sale
+    precio: float  # precio compra o venta
+    subtotal: float  # subtotal línea
+    saldo: float = 0.0  # se calcula
+
+
+def obtener_kardex(
+    product_id: int,
+    desde: datetime | None = None,
+    hasta: datetime | None = None,
+) -> dict:
+    """
+    Retorna:
+      {
+        "saldo_inicial": float,
+        "rows": list[KardexRow]
+      }
+
+    Regla para ventas anuladas:
+      - registra la VENTA en sale.fecha (cantidad negativa)
+      - registra la ANULACION en sale.anulada_en (cantidad positiva)
+    """
+    pid = int(product_id)
+
+    with SessionLocal() as db:
+        # -------------------------
+        # 1) Entradas (compras)
+        # -------------------------
+        compras = (
+            db.query(
+                Entry.fecha,
+                Entry.id,
+                Supplier.nombre,
+                EntryDetail.cantidad,
+                EntryDetail.precio_compra,
+                EntryDetail.subtotal,
+            )
+            .join(EntryDetail, EntryDetail.entry_id == Entry.id)
+            .join(Supplier, Supplier.id == Entry.supplier_id)
+            .filter(EntryDetail.product_id == pid)
+            .all()
+        )
+
+        # -------------------------
+        # 2) Ventas
+        # -------------------------
+        ventas = (
+            db.query(
+                Sale.fecha,
+                Sale.id,
+                Sale.anulada,
+                Sale.anulada_en,
+                SaleDetail.cantidad,
+                SaleDetail.precio_venta,
+                SaleDetail.subtotal,
+            )
+            .join(SaleDetail, SaleDetail.sale_id == Sale.id)
+            .filter(SaleDetail.product_id == pid)
+            .all()
+        )
+
+    movimientos: list[KardexRow] = []
+
+    # Compras -> ENTRADA (+)
+    for fecha, entry_id, proveedor, cant, precio, sub in compras:
+        movimientos.append(
+            KardexRow(
+                fecha=fecha,
+                tipo="ENTRADA",
+                referencia=f"Compra #{entry_id} ({proveedor})",
+                cantidad=float(cant or 0.0),
+                precio=float(precio or 0.0),
+                subtotal=float(sub or 0.0),
+            )
+        )
+
+    # Ventas -> VENTA (-) y si anulada -> ANULACION (+) en anulada_en
+    for fecha, sale_id, anulada, anulada_en, cant, precio, sub in ventas:
+        cant = float(cant or 0.0)
+        precio = float(precio or 0.0)
+        sub = float(sub or 0.0)
+
+        movimientos.append(
+            KardexRow(
+                fecha=fecha,
+                tipo="VENTA",
+                referencia=f"Venta #{sale_id}",
+                cantidad=-cant,
+                precio=precio,
+                subtotal=-sub,
+            )
+        )
+
+        if bool(anulada) and anulada_en:
+            movimientos.append(
+                KardexRow(
+                    fecha=anulada_en,
+                    tipo="ANULACION",
+                    referencia=f"Anulación Venta #{sale_id}",
+                    cantidad=+cant,
+                    precio=precio,
+                    subtotal=+sub,
+                )
+            )
+
+    # Orden cronológico
+    movimientos.sort(key=lambda r: (r.fecha or datetime.min, r.tipo))
+
+    # Saldo inicial = movimientos antes de "desde"
+    saldo_inicial = 0.0
+    if desde:
+        for r in movimientos:
+            if r.fecha and r.fecha < desde:
+                saldo_inicial += float(r.cantidad or 0.0)
+
+    # Filtrar rango
+    rows: list[KardexRow] = []
+    for r in movimientos:
+        if desde and r.fecha and r.fecha < desde:
+            continue
+        if hasta and r.fecha and r.fecha > hasta:
+            continue
+        rows.append(r)
+
+    # Calcular saldo acumulado desde saldo_inicial
+    saldo = saldo_inicial
+    for r in rows:
+        saldo += float(r.cantidad or 0.0)
+        r.saldo = saldo
+
+    return {"saldo_inicial": saldo_inicial, "rows": rows}
