@@ -49,17 +49,27 @@ class ProductsWindow(QWidget):
         top.addStretch()
         layout.addLayout(top)
 
-        # Tabla
+        # Tabla — col 0 = ID (oculta), el resto visible
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Código", "Nombre", "Unidad", "Stock", "Precio Venta", "Activo"]
+            [
+                "ID",
+                "Código",
+                "Nombre",
+                "Unidad",
+                "Stock",
+                "Precio Venta",
+                "Activo",
+                "Stock mín.",
+            ]
         )
+        self.table.setColumnHidden(0, True)  # ← ID oculto, usado para lookup
         self.table.setSortingEnabled(True)
         self.table.cellDoubleClicked.connect(self._dbl_click_editar)
         layout.addWidget(self.table)
 
-        self._productos = []
+        self._productos: dict[int, object] = {}  # id -> producto
         self.cargar_productos()
 
     def showEvent(self, event):
@@ -68,21 +78,25 @@ class ProductsWindow(QWidget):
 
     def cargar_productos(self):
         texto = self.txt_buscar.text().strip()
-        self._productos = listar_productos(texto=texto, incluir_inactivos=True)
+        lista = listar_productos(texto=texto, incluir_inactivos=True)
+
+        # Guardar como dict id->producto para lookup seguro
+        self._productos = {p.id: p for p in lista}
 
         was_sorting = self.table.isSortingEnabled()
         self.table.setSortingEnabled(False)
         self.table.blockSignals(True)
 
-        self.table.setRowCount(len(self._productos))
+        self.table.setRowCount(len(lista))
 
-        for row, p in enumerate(self._productos):
+        for row, p in enumerate(lista):
             stock = float(p.stock_actual or 0.0)
             minimo = float(p.stock_minimo or 0.0)
-
             es_bajo = minimo > 0 and stock <= minimo
 
+            # Col 0: ID oculto — clave para lookup al seleccionar
             self.table.setItem(row, 0, QTableWidgetItem(str(p.id)))
+
             self.table.setItem(row, 1, QTableWidgetItem(p.codigo or ""))
             self.table.setItem(row, 2, QTableWidgetItem(p.nombre or ""))
             self.table.setItem(row, 3, QTableWidgetItem(p.unidad or ""))
@@ -90,12 +104,10 @@ class ProductsWindow(QWidget):
             # Stock
             item_stock = QTableWidgetItem(f"{stock:.2f}")
             item_stock.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
             if es_bajo:
                 font = QFont()
                 font.setBold(True)
                 item_stock.setFont(font)
-
             self.table.setItem(row, 4, item_stock)
 
             # Precio
@@ -112,7 +124,12 @@ class ProductsWindow(QWidget):
             # Activo
             self.table.setItem(row, 6, QTableWidgetItem("Sí" if p.activo else "No"))
 
-            # 🔴 Pintar fila si stock bajo
+            # Stock mínimo
+            item_min = QTableWidgetItem(f"{minimo:.2f}")
+            item_min.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.table.setItem(row, 7, item_min)
+
+            # Pintar fila si stock bajo
             if es_bajo:
                 for col in range(self.table.columnCount()):
                     item = self.table.item(row, col)
@@ -125,10 +142,17 @@ class ProductsWindow(QWidget):
         self.table.setSortingEnabled(was_sorting)
 
     def _get_selected_product(self):
+        """
+        Obtiene el producto seleccionado usando el ID de la col 0 (oculta).
+        Funciona correctamente aunque la tabla esté ordenada por cualquier columna.
+        """
         row = self.table.currentRow()
-        if row < 0 or row >= len(self._productos):
+        if row < 0:
             return None
-        return self._productos[row]
+        id_item = self.table.item(row, 0)
+        if not id_item:
+            return None
+        return self._productos.get(int(id_item.text()))
 
     def abrir_form_nuevo(self):
         from app.ui.product_form import ProductForm

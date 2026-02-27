@@ -15,6 +15,15 @@ from sqlalchemy.sql import func
 Base = declarative_base()
 
 
+def _now() -> datetime:
+    """
+    Hora actual local sin timezone (naive).
+    Consistente con los datos existentes en la BD guardados con datetime.utcnow.
+    Nota: cuando la BD sea nueva o se migre, se puede cambiar a timezone.utc.
+    """
+    return datetime.now()
+
+
 class Product(Base):
     __tablename__ = "products"
 
@@ -24,9 +33,9 @@ class Product(Base):
     unidad = Column(String(20), default="und")
     precio_venta = Column(Float, default=0.0)
     stock_minimo = Column(Float, default=0.0)
-    stock_actual = Column(Float, default=0.0)  # ← NUEVO
+    stock_actual = Column(Float, default=0.0)
     activo = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
     costo_promedio = Column(Float, default=0.0)
 
 
@@ -49,8 +58,7 @@ class Entry(Base):
 
     id = Column(Integer, primary_key=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False)
-
-    fecha = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(DateTime, default=_now)
     total = Column(Float, default=0.0)
 
     supplier = relationship("Supplier")
@@ -78,19 +86,11 @@ class CashMovement(Base):
     __tablename__ = "cash_movements"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    tipo = Column(String, nullable=False)
-    # "INGRESO" o "EGRESO"
-
+    tipo = Column(String, nullable=False)  # "INGRESO" o "EGRESO"
     concepto = Column(String, nullable=False)
-
     monto = Column(Float, nullable=False)
-
-    fecha = Column(DateTime(timezone=True), server_default=func.now())
-
+    fecha = Column(DateTime, server_default=func.now(), default=_now)
     referencia = Column(String, nullable=True)
-    # ejemplo: "Venta #5" o "Compra #3"
-
     observacion = Column(String, nullable=True)
 
 
@@ -105,15 +105,15 @@ class CashClosure(Base):
     saldo_inicial = Column(Float, default=0.0)
     saldo_final = Column(Float, default=0.0)
 
-    creado_en = Column(DateTime, default=datetime.now)
-    cerrado_por = Column(String(120), nullable=True)  # opcional (usuario)
+    creado_en = Column(DateTime, default=_now)
+    cerrado_por = Column(String(120), nullable=True)
 
 
 class Sale(Base):
     __tablename__ = "sales"
 
     id = Column(Integer, primary_key=True)
-    fecha = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(DateTime, default=_now)
     total = Column(Float, default=0.0)
 
     details = relationship(

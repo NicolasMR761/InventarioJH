@@ -21,7 +21,7 @@ from app.db.database import init_db, get_app_data_dir
 from app.utils.backup import crear_backup
 
 
-APP_VERSION = "v0.8.0"  # <-- actualiza cuando hagas tag
+APP_VERSION = "v1.1.0"  # <-- actualiza cuando hagas tag
 
 
 class DashboardTile(QFrame):

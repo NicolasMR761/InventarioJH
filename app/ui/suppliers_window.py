@@ -46,26 +46,33 @@ class SuppliersWindow(QWidget):
         top.addStretch()
         layout.addLayout(top)
 
+        # Col 0 = ID oculto, el resto visible
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
             ["ID", "Nombre", "NIT", "Teléfono", "Dirección", "Activo"]
         )
+        self.table.setColumnHidden(0, True)  # ← ID oculto, usado para lookup
         self.table.setSortingEnabled(True)
         self.table.cellDoubleClicked.connect(self._dbl_click_editar)
         layout.addWidget(self.table)
 
-        self._proveedores = []
+        self._proveedores: dict[int, object] = {}  # id -> proveedor
         self.cargar_proveedores()
 
     def cargar_proveedores(self):
         texto = self.txt_buscar.text().strip()
-        self._proveedores = listar_proveedores(texto=texto, incluir_inactivos=True)
+        lista = listar_proveedores(texto=texto, incluir_inactivos=True)
 
-        self.table.setRowCount(len(self._proveedores))
+        # Guardar como dict id->proveedor para lookup seguro
+        self._proveedores = {p.id: p for p in lista}
 
-        for row, p in enumerate(self._proveedores):
+        self.table.setRowCount(len(lista))
+
+        for row, p in enumerate(lista):
+            # Col 0: ID oculto — clave para lookup al seleccionar
             self.table.setItem(row, 0, QTableWidgetItem(str(p.id)))
+
             self.table.setItem(row, 1, QTableWidgetItem(p.nombre or ""))
             self.table.setItem(row, 2, QTableWidgetItem(p.nit or ""))
             self.table.setItem(row, 3, QTableWidgetItem(p.telefono or ""))
@@ -75,10 +82,17 @@ class SuppliersWindow(QWidget):
         self.table.resizeColumnsToContents()
 
     def _get_selected(self):
+        """
+        Obtiene el proveedor seleccionado usando el ID de la col 0 (oculta).
+        Funciona correctamente aunque la tabla esté ordenada por cualquier columna.
+        """
         row = self.table.currentRow()
-        if row < 0 or row >= len(self._proveedores):
+        if row < 0:
             return None
-        return self._proveedores[row]
+        id_item = self.table.item(row, 0)
+        if not id_item:
+            return None
+        return self._proveedores.get(int(id_item.text()))
 
     def abrir_form_nuevo(self):
         from app.ui.supplier_form import SupplierForm

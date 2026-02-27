@@ -3,24 +3,7 @@ from __future__ import annotations
 from app.db.database import SessionLocal
 from app.db.models import Entry, EntryDetail, Product, Supplier
 from app.db.cash_repo import registrar_movimiento_en_db
-
-
-def _fmt_cop_simple(value: float) -> str:
-    """Formato COP simple sin decimales: $20.000"""
-    try:
-        s = "${:,.0f}".format(float(value or 0.0))
-        return s.replace(",", "X").replace(".", ",").replace("X", ".")
-    except Exception:
-        return "$0"
-
-
-def _fmt_qty(value: float) -> str:
-    """Cantidad: si es entero -> '6', si no -> '6.5'"""
-    try:
-        v = float(value)
-    except Exception:
-        return "0"
-    return f"{int(v)}" if v.is_integer() else f"{v:g}"
+from app.utils.formatters import fmt_cop, fmt_qty  # ← centralizado
 
 
 def crear_entrada(
@@ -34,7 +17,6 @@ def crear_entrada(
         {"product_id": 1, "cantidad": 2, "precio_compra": 3500},
         ...
     ]
-
     Crea entry + details, suma stock_actual a Product.
     Si pagado=True => registra EGRESO en caja (misma transacción).
     """
@@ -53,9 +35,6 @@ def crear_entrada(
 
         entry = Entry(supplier_id=supplier_id, total=0.0)
         total = 0.0
-
-        # Para mostrar en Caja qué se compró
-
         detalles_txt: list[str] = []
 
         try:
@@ -88,33 +67,28 @@ def crear_entrada(
                 )
                 entry.details.append(detail)
 
-                # ✅ Observación detallada para Caja (una línea por producto)
+                # Línea de detalle para Caja — usa formatters centralizados
                 detalles_txt.append(
-                    f"{product.nombre} x{_fmt_qty(cantidad)} a {_fmt_cop_simple(precio)} c/u"
+                    f"{product.nombre} x{fmt_qty(cantidad)} a {fmt_cop(precio)} c/u"
                 )
 
-                # ✅ Actualiza stock
+                # Actualizar stock
                 stock = float(getattr(product, "stock_actual", 0.0) or 0.0)
                 product.stock_actual = stock + cantidad
 
             entry.total = float(total)
-
             db.add(entry)
-            db.flush()  # para obtener entry.id sin cerrar transacción
+            db.flush()
 
-            # ✅ Caja (misma transacción)
             if pagado:
                 concepto = f"Compra (Entrada #{entry.id}) - {supplier.nombre}"
-
-                # ✅ Cada item en una línea
                 observacion = "\n".join(detalles_txt).strip() if detalles_txt else None
-
-                # ✅ Método en otra línea
                 if metodo_pago:
-                    if observacion:
-                        observacion += f"\nMétodo: {metodo_pago}"
-                    else:
-                        observacion = f"Método: {metodo_pago}"
+                    observacion = (
+                        (observacion + f"\nMétodo: {metodo_pago}")
+                        if observacion
+                        else f"Método: {metodo_pago}"
+                    )
 
                 registrar_movimiento_en_db(
                     db,
