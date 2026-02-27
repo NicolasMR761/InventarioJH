@@ -22,12 +22,28 @@ from PySide6.QtWidgets import (
 
 from app.db.products_repo import listar_productos
 from app.db.kardex_repo import obtener_kardex
-from app.utils.formatters import fmt_fecha, fmt_cop, fmt_qty  # ← centralizado
+from app.utils.formatters import fmt_fecha
+
+
+def _fmt_qty(x: float) -> str:
+    try:
+        v = float(x or 0.0)
+        s = f"{v:.3f}".rstrip("0").rstrip(".")
+        return s.replace(".", ",")
+    except Exception:
+        return "0"
+
+
+def _fmt_cop(value: float) -> str:
+    try:
+        s = "${:,.2f}".format(float(value or 0.0))
+        return s.replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "$0,00"
 
 
 def _item(
-    text: str,
-    align: Qt.AlignmentFlag | Qt.Alignment = Qt.AlignLeft | Qt.AlignVCenter,
+    text: str, align: Qt.AlignmentFlag | Qt.Alignment = Qt.AlignLeft | Qt.AlignVCenter
 ) -> QTableWidgetItem:
     it = QTableWidgetItem(text)
     it.setTextAlignment(int(align))
@@ -42,7 +58,9 @@ class KardexWindow(QWidget):
 
         layout = QVBoxLayout(self)
 
-        # --- Filtros ---
+        # -------------------
+        # Filtros
+        # -------------------
         top = QHBoxLayout()
 
         top.addWidget(QLabel("Producto:"))
@@ -74,12 +92,17 @@ class KardexWindow(QWidget):
 
         layout.addLayout(top)
 
-        # --- Info saldo inicial ---
+        # -------------------
+        # Info saldo inicial + advertencias
+        # -------------------
         self.lbl_info = QLabel("Saldo inicial: 0")
         self.lbl_info.setAlignment(Qt.AlignLeft)
+        self.lbl_info.setWordWrap(True)  # ✅ necesario para mostrar advertencias largas
         layout.addWidget(self.lbl_info)
 
-        # --- Tabla ---
+        # -------------------
+        # Tabla
+        # -------------------
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(
             ["Fecha", "Tipo", "Referencia", "Cantidad", "Precio", "Subtotal", "Saldo"]
@@ -104,13 +127,14 @@ class KardexWindow(QWidget):
 
         layout.addWidget(self.table, 1)
 
-        # --- Separador ---
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setFrameShadow(QFrame.Sunken)
         layout.addWidget(sep)
 
-        # --- Resumen inferior ---
+        # -------------------
+        # Resumen inferior
+        # -------------------
         bottom = QHBoxLayout()
         bottom.setSpacing(18)
 
@@ -133,19 +157,21 @@ class KardexWindow(QWidget):
 
         layout.addLayout(bottom)
 
-        # Señales
         self.btn_cargar.clicked.connect(self.cargar)
         self.btn_pdf.clicked.connect(self.exportar_pdf)
         self.btn_excel.clicked.connect(self.exportar_excel)
 
         self._prod_unidad: dict[int, str] = {}
+
         self._cargar_productos()
         self.cargar()
 
     def _cargar_productos(self):
         self.cbo_producto.clear()
         self._prod_unidad.clear()
-        for p in listar_productos("", incluir_inactivos=False):
+
+        productos = listar_productos("", incluir_inactivos=False)
+        for p in productos:
             unidad = (getattr(p, "unidad", "") or "").strip() or "und"
             self._prod_unidad[p.id] = unidad
             self.cbo_producto.addItem(f"{p.codigo} - {p.nombre} ({unidad})", p.id)
@@ -178,11 +204,11 @@ class KardexWindow(QWidget):
         neto = tot_entradas - tot_ventas + tot_anul
         saldo_final = float(rows[-1].saldo) if rows else 0.0
 
-        self.lbl_tot_entradas.setText(f"Entradas: {fmt_qty(tot_entradas)} {unidad}")
-        self.lbl_tot_ventas.setText(f"Ventas: {fmt_qty(tot_ventas)} {unidad}")
-        self.lbl_tot_anul.setText(f"Anulaciones: {fmt_qty(tot_anul)} {unidad}")
-        self.lbl_neto.setText(f"Neto: {fmt_qty(neto)} {unidad}")
-        self.lbl_saldo_final.setText(f"Saldo final: {fmt_qty(saldo_final)} {unidad}")
+        self.lbl_tot_entradas.setText(f"Entradas: {_fmt_qty(tot_entradas)} {unidad}")
+        self.lbl_tot_ventas.setText(f"Ventas: {_fmt_qty(tot_ventas)} {unidad}")
+        self.lbl_tot_anul.setText(f"Anulaciones: {_fmt_qty(tot_anul)} {unidad}")
+        self.lbl_neto.setText(f"Neto: {_fmt_qty(neto)} {unidad}")
+        self.lbl_saldo_final.setText(f"Saldo final: {_fmt_qty(saldo_final)} {unidad}")
 
     def cargar(self):
         if self.cbo_producto.count() == 0:
@@ -215,57 +241,64 @@ class KardexWindow(QWidget):
         saldo_inicial = float(data["saldo_inicial"] or 0.0)
         rows = data["rows"]
 
-        self.lbl_info.setText(
-            f"Saldo inicial (antes del rango): {fmt_qty(saldo_inicial)} {unidad}"
+        # ✅ FIX #1: Mostrar advertencias de anulaciones fuera de rango
+        advertencias: list[str] = data.get("advertencias", [])
+        info_txt = (
+            f"Saldo inicial (antes del rango): {_fmt_qty(saldo_inicial)} {unidad}"
         )
+        if advertencias:
+            info_txt += "\n" + "\n".join(advertencias)
+        self.lbl_info.setText(info_txt)
+
         self.table.setRowCount(len(rows))
 
         font_tipo = QFont()
         font_tipo.setBold(True)
 
         for i, r in enumerate(rows):
+            fecha_txt = fmt_fecha(r.fecha)
             tipo_txt = (r.tipo or "").upper().strip()
+            ref_txt = r.referencia or ""
 
-            it_tipo = _item(tipo_txt)
+            it_fecha = _item(fecha_txt, Qt.AlignLeft | Qt.AlignVCenter)
+            it_tipo = _item(tipo_txt, Qt.AlignLeft | Qt.AlignVCenter)
+            it_ref = _item(ref_txt, Qt.AlignLeft | Qt.AlignVCenter)
+            it_cant = _item(_fmt_qty(r.cantidad), Qt.AlignRight | Qt.AlignVCenter)
+            it_precio = _item(_fmt_cop(r.precio), Qt.AlignRight | Qt.AlignVCenter)
+            it_sub = _item(_fmt_cop(r.subtotal), Qt.AlignRight | Qt.AlignVCenter)
+            it_saldo = _item(_fmt_qty(r.saldo), Qt.AlignRight | Qt.AlignVCenter)
+
             it_tipo.setFont(font_tipo)
+            it_ref.setToolTip(ref_txt)
 
-            it_ref = _item(r.referencia or "")
-            it_ref.setToolTip(r.referencia or "")
-
-            self.table.setItem(i, 0, _item(fmt_fecha(r.fecha)))
+            self.table.setItem(i, 0, it_fecha)
             self.table.setItem(i, 1, it_tipo)
             self.table.setItem(i, 2, it_ref)
-            self.table.setItem(
-                i, 3, _item(fmt_qty(r.cantidad), Qt.AlignRight | Qt.AlignVCenter)
-            )
-            self.table.setItem(
-                i, 4, _item(fmt_cop(r.precio), Qt.AlignRight | Qt.AlignVCenter)
-            )
-            self.table.setItem(
-                i, 5, _item(fmt_cop(r.subtotal), Qt.AlignRight | Qt.AlignVCenter)
-            )
-            self.table.setItem(
-                i, 6, _item(fmt_qty(r.saldo), Qt.AlignRight | Qt.AlignVCenter)
-            )
+            self.table.setItem(i, 3, it_cant)
+            self.table.setItem(i, 4, it_precio)
+            self.table.setItem(i, 5, it_sub)
+            self.table.setItem(i, 6, it_saldo)
 
             brush = self._row_brush(tipo_txt)
             if brush is not None:
                 for col in range(7):
                     cell = self.table.item(i, col)
-                    if cell:
+                    if cell is not None:
                         cell.setBackground(brush)
 
         self.table.resizeRowsToContents()
         self._set_resumen(unidad, rows)
 
-    # --- Exportar ---
-
+    # -------------------
+    # Exportar
+    # -------------------
     def _kardex_para_exportar(self):
         if self.cbo_producto.count() == 0:
             return None
 
         product_id = int(self.cbo_producto.currentData())
         unidad = self._prod_unidad.get(product_id, "und")
+
         d1 = self.dt_desde.date().toPython()
         d2 = self.dt_hasta.date().toPython()
         desde = datetime.combine(d1, time(0, 0, 0))
@@ -286,6 +319,9 @@ class KardexWindow(QWidget):
             elif t == "ANULACION":
                 tot_anul += c
 
+        neto = tot_entradas - tot_ventas + tot_anul
+        saldo_final = float(rows[-1].saldo) if rows else 0.0
+
         return {
             "product_id": product_id,
             "producto_text": self.cbo_producto.currentText(),
@@ -294,39 +330,47 @@ class KardexWindow(QWidget):
             "hasta": d2,
             "saldo_inicial": saldo_inicial,
             "rows": rows,
+            "advertencias": data.get("advertencias", []),
             "tot_entradas": tot_entradas,
             "tot_ventas": tot_ventas,
             "tot_anul": tot_anul,
-            "neto": tot_entradas - tot_ventas + tot_anul,
-            "saldo_final": float(rows[-1].saldo) if rows else 0.0,
+            "neto": neto,
+            "saldo_final": saldo_final,
         }
 
     def exportar_pdf(self):
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.units import cm
+        except ImportError:
+            QMessageBox.critical(
+                self,
+                "Dependencia faltante",
+                "Instala reportlab:\n\npip install reportlab",
+            )
+            return
+
         try:
             payload = self._kardex_para_exportar()
             if not payload:
                 QMessageBox.information(self, "Kardex", "No hay datos para exportar.")
                 return
 
+            producto = payload["producto_text"]
             d1 = payload["desde"]
             d2 = payload["hasta"]
 
             path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Guardar PDF",
-                f"kardex_{d1}_a_{d2}.pdf",
-                "PDF (*.pdf)",
+                self, "Guardar PDF", f"kardex_{d1}_a_{d2}.pdf", "PDF (*.pdf)"
             )
             if not path:
                 return
 
-            from reportlab.lib.pagesizes import letter
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.units import cm
-
             unidad = payload["unidad"]
             saldo_inicial = payload["saldo_inicial"]
             rows = payload["rows"]
+            advertencias = payload["advertencias"]
 
             c = canvas.Canvas(path, pagesize=letter)
             w, h = letter
@@ -337,31 +381,35 @@ class KardexWindow(QWidget):
                 c.drawString(2 * cm, y, "Kardex por Producto")
                 y -= 0.7 * cm
                 c.setFont("Helvetica", 10)
-                c.drawString(2 * cm, y, f"Producto: {payload['producto_text']}")
+                c.drawString(2 * cm, y, f"Producto: {producto}")
                 y -= 0.5 * cm
                 c.drawString(2 * cm, y, f"Rango: {d1} a {d2}")
                 y -= 0.5 * cm
                 c.drawString(
-                    2 * cm,
-                    y,
-                    f"Saldo inicial (antes del rango): {fmt_qty(saldo_inicial)} {unidad}",
+                    2 * cm, y, f"Saldo inicial: {_fmt_qty(saldo_inicial)} {unidad}"
                 )
-                y -= 0.8 * cm
+                y -= 0.5 * cm
+
+                if advertencias:
+                    c.setFont("Helvetica-Oblique", 8)
+                    for adv in advertencias:
+                        c.drawString(2 * cm, y, adv[:110])
+                        y -= 0.4 * cm
+                    c.setFont("Helvetica", 10)
+                    y -= 0.2 * cm
 
                 c.setFont("Helvetica-Bold", 11)
                 c.drawString(2 * cm, y, "Resumen")
                 y -= 0.55 * cm
                 c.setFont("Helvetica", 10)
-                for label, key in [
-                    ("Entradas", "tot_entradas"),
-                    ("Ventas", "tot_ventas"),
-                    ("Anulaciones", "tot_anul"),
-                    ("Neto", "neto"),
-                    ("Saldo final", "saldo_final"),
+                for label, val in [
+                    ("Entradas", payload["tot_entradas"]),
+                    ("Ventas", payload["tot_ventas"]),
+                    ("Anulaciones", payload["tot_anul"]),
+                    ("Neto", payload["neto"]),
+                    ("Saldo final", payload["saldo_final"]),
                 ]:
-                    c.drawString(
-                        2 * cm, y, f"{label}: {fmt_qty(payload[key])} {unidad}"
-                    )
+                    c.drawString(2 * cm, y, f"{label}: {_fmt_qty(val)} {unidad}")
                     y -= 0.45 * cm
                 y -= 0.4 * cm
 
@@ -369,7 +417,7 @@ class KardexWindow(QWidget):
                 c.drawString(2 * cm, y, "Fecha")
                 c.drawString(5.2 * cm, y, "Tipo")
                 c.drawString(7.3 * cm, y, "Referencia")
-                c.drawRightString(14.2 * cm, y, f"Cantidad ({unidad})")
+                c.drawRightString(14.2 * cm, y, f"Cant ({unidad})")
                 c.drawRightString(16.7 * cm, y, "Precio")
                 c.drawRightString(19.5 * cm, y, "Subtotal")
                 y -= 0.35 * cm
@@ -377,18 +425,12 @@ class KardexWindow(QWidget):
                 y -= 0.35 * cm
                 c.setFont("Helvetica", 9)
 
-            def ensure_space(min_h=2 * cm):
-                nonlocal y
-                if y < min_h:
-                    c.showPage()
-                    y = h - 2 * cm
-                    header_page()
-
             def wrap_text(text: str, max_width: float) -> list[str]:
                 words = (text or "").split()
                 if not words:
                     return [""]
-                lines, line = [], words[0]
+                lines = []
+                line = words[0]
                 for w2 in words[1:]:
                     test = f"{line} {w2}"
                     if c.stringWidth(test, "Helvetica", 9) <= max_width:
@@ -402,25 +444,37 @@ class KardexWindow(QWidget):
             y = h - 2 * cm
             header_page()
 
-            ref_col_width = 14.2 * cm - 7.3 * cm - 0.3 * cm
+            x_fecha = 2 * cm
+            x_tipo = 5.2 * cm
+            x_ref = 7.3 * cm
+            x_cant_r = 14.2 * cm
+            x_prec_r = 16.7 * cm
+            x_sub_r = 19.5 * cm
+            ref_col_width = x_cant_r - x_ref - 0.3 * cm
 
             for r in rows:
-                tipo_txt = (r.tipo or "").upper().strip()
                 ref_lines = wrap_text(r.referencia or "", ref_col_width)
                 needed = max(1, len(ref_lines)) * 0.42 * cm + 0.05 * cm
-                ensure_space(2 * cm + needed)
 
-                c.drawString(2 * cm, y, str(fmt_fecha(r.fecha))[:16])
-                c.drawString(5.2 * cm, y, tipo_txt[:10])
+                if y < 2 * cm + needed:
+                    c.showPage()
+                    y = h - 2 * cm
+                    header_page()
+
+                fecha_txt = str(fmt_fecha(r.fecha) or "")[:16]
+                tipo_txt = (r.tipo or "").upper().strip()
+
+                c.drawString(x_fecha, y, fecha_txt)
+                c.drawString(x_tipo, y, tipo_txt[:10])
 
                 yy = y
                 for line in ref_lines:
-                    c.drawString(7.3 * cm, yy, line)
+                    c.drawString(x_ref, yy, line)
                     yy -= 0.42 * cm
 
-                c.drawRightString(14.2 * cm, y, fmt_qty(r.cantidad))
-                c.drawRightString(16.7 * cm, y, fmt_cop(r.precio))
-                c.drawRightString(19.5 * cm, y, fmt_cop(r.subtotal))
+                c.drawRightString(x_cant_r, y, _fmt_qty(r.cantidad))
+                c.drawRightString(x_prec_r, y, _fmt_cop(r.precio))
+                c.drawRightString(x_sub_r, y, _fmt_cop(r.subtotal))
                 y -= needed
 
             c.save()
@@ -431,31 +485,36 @@ class KardexWindow(QWidget):
 
     def exportar_excel(self):
         try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, Alignment
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            QMessageBox.critical(
+                self,
+                "Dependencia faltante",
+                "Instala openpyxl:\n\npip install openpyxl",
+            )
+            return
+
+        try:
             payload = self._kardex_para_exportar()
             if not payload:
                 QMessageBox.information(self, "Kardex", "No hay datos para exportar.")
                 return
 
+            producto = payload["producto_text"]
             d1 = payload["desde"]
             d2 = payload["hasta"]
 
             path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Guardar Excel",
-                f"kardex_{d1}_a_{d2}.xlsx",
-                "Excel (*.xlsx)",
+                self, "Guardar Excel", f"kardex_{d1}_a_{d2}.xlsx", "Excel (*.xlsx)"
             )
             if not path:
                 return
 
-            from openpyxl import Workbook
-            from openpyxl.styles import Font, Alignment
-            from openpyxl.utils import get_column_letter
-
             unidad = payload["unidad"]
-            saldo_inicial = payload["saldo_inicial"]
             rows = payload["rows"]
-            align_right = Alignment(horizontal="right")
+            advertencias = payload["advertencias"]
 
             wb = Workbook()
             ws = wb.active
@@ -464,31 +523,40 @@ class KardexWindow(QWidget):
             ws["A1"] = "Kardex por Producto"
             ws["A1"].font = Font(bold=True, size=14)
             ws["A2"] = "Producto:"
-            ws["B2"] = payload["producto_text"]
+            ws["B2"] = producto
             ws["A3"] = "Rango:"
             ws["B3"] = f"{d1} a {d2}"
             ws["A4"] = "Saldo inicial:"
-            ws["B4"] = f"{fmt_qty(saldo_inicial)} {unidad}"
+            ws["B4"] = f"{_fmt_qty(payload['saldo_inicial'])} {unidad}"
 
-            ws["A6"] = "Resumen"
-            ws["A6"].font = Font(bold=True)
-            for i, (label, key) in enumerate(
-                [
-                    ("Entradas", "tot_entradas"),
-                    ("Ventas", "tot_ventas"),
-                    ("Anulaciones", "tot_anul"),
-                    ("Neto", "neto"),
-                    ("Saldo final", "saldo_final"),
-                ],
-                start=7,
-            ):
-                ws[f"A{i}"] = label
-                ws[f"B{i}"] = f"{fmt_qty(payload[key])} {unidad}"
+            row_ptr = 6
 
-            ws["A11"].font = Font(bold=True)
-            ws["B11"].font = Font(bold=True)
+            # ✅ Advertencias en Excel también
+            if advertencias:
+                ws[f"A{row_ptr}"] = "⚠️ Advertencias:"
+                ws[f"A{row_ptr}"].font = Font(bold=True, color="FF8800")
+                row_ptr += 1
+                for adv in advertencias:
+                    ws[f"A{row_ptr}"] = adv
+                    ws[f"A{row_ptr}"].font = Font(italic=True, color="FF8800")
+                    row_ptr += 1
+                row_ptr += 1
 
-            start_row = 13
+            ws[f"A{row_ptr}"] = "Resumen"
+            ws[f"A{row_ptr}"].font = Font(bold=True)
+            row_ptr += 1
+            for label, val in [
+                ("Entradas", payload["tot_entradas"]),
+                ("Ventas", payload["tot_ventas"]),
+                ("Anulaciones", payload["tot_anul"]),
+                ("Neto", payload["neto"]),
+                ("Saldo final", payload["saldo_final"]),
+            ]:
+                ws[f"A{row_ptr}"] = label
+                ws[f"B{row_ptr}"] = f"{_fmt_qty(val)} {unidad}"
+                row_ptr += 1
+
+            row_ptr += 1
             headers = [
                 "Fecha",
                 "Tipo",
@@ -499,16 +567,18 @@ class KardexWindow(QWidget):
                 f"Saldo ({unidad})",
             ]
             for col, htxt in enumerate(headers, 1):
-                ws.cell(start_row, col, htxt).font = Font(bold=True)
+                cell = ws.cell(row=row_ptr, column=col, value=htxt)
+                cell.font = Font(bold=True)
 
-            for i, r in enumerate(rows, start=start_row + 1):
+            align_right = Alignment(horizontal="right")
+            for i, r in enumerate(rows, start=row_ptr + 1):
                 ws.cell(i, 1, fmt_fecha(r.fecha))
                 ws.cell(i, 2, (r.tipo or "").upper().strip())
                 ws.cell(i, 3, r.referencia or "")
-                ws.cell(i, 4, fmt_qty(r.cantidad)).alignment = align_right
-                ws.cell(i, 5, fmt_cop(r.precio)).alignment = align_right
-                ws.cell(i, 6, fmt_cop(r.subtotal)).alignment = align_right
-                ws.cell(i, 7, fmt_qty(r.saldo)).alignment = align_right
+                ws.cell(i, 4, _fmt_qty(r.cantidad)).alignment = align_right
+                ws.cell(i, 5, _fmt_cop(r.precio)).alignment = align_right
+                ws.cell(i, 6, _fmt_cop(r.subtotal)).alignment = align_right
+                ws.cell(i, 7, _fmt_qty(r.saldo)).alignment = align_right
 
             for col in range(1, 8):
                 ws.column_dimensions[get_column_letter(col)].width = 18

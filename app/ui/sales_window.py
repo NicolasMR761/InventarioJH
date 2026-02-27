@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-from app.db.products_repo import listar_productos  # ← repo, no SessionLocal directo
+from app.db.products_repo import listar_productos
 from app.db.sales_repo import (
     crear_venta,
     listar_ventas,
@@ -34,7 +34,7 @@ class SalesWindow(QWidget):
 
         root = QVBoxLayout(self)
 
-        # --- Controles de agregar item ---
+        # --- Controles agregar item ---
         top = QHBoxLayout()
         root.addLayout(top)
 
@@ -71,7 +71,7 @@ class SalesWindow(QWidget):
         pay.addWidget(self.cbo_metodo, 1)
         pay.addStretch()
 
-        # --- Tabla de items ---
+        # --- Tabla items venta actual ---
         self.tbl = QTableWidget(0, 5)
         self.tbl.setHorizontalHeaderLabels(
             ["ID", "Producto", "Cant", "Precio", "Subtotal"]
@@ -80,7 +80,7 @@ class SalesWindow(QWidget):
         self.tbl.horizontalHeader().setStretchLastSection(True)
         root.addWidget(self.tbl, 1)
 
-        # --- Historial de ventas ---
+        # --- Historial ---
         root.addWidget(QLabel("Historial (últimas ventas):"))
 
         self.tbl_hist = QTableWidget(0, 3)
@@ -116,21 +116,19 @@ class SalesWindow(QWidget):
         self.btn_anular = QPushButton("Anular venta seleccionada")
         bottom.addWidget(self.btn_anular)
 
-        # Eventos
         self.btn_agregar.clicked.connect(self.agregar_item)
         self.btn_quitar.clicked.connect(self.quitar_item)
         self.btn_guardar.clicked.connect(self.guardar_venta)
         self.btn_anular.clicked.connect(self.anular_seleccionada)
 
-        # Al cambiar producto, rellena el precio de venta automáticamente
-        self.cbo_producto.currentIndexChanged.connect(self._rellenar_precio)
+        # ✅ Cache de productos: lista de dicts para evitar DetachedInstanceError
+        self._productos_cache: list[dict] = []
 
-        self._productos: dict[int, object] = {}  # id -> producto
         self.cargar_productos()
         self.cargar_historial()
 
     # -----------------------
-    # Utilidades formato $
+    # Formato $
     # -----------------------
     def _fmt_money(self, value: float) -> str:
         return (
@@ -141,34 +139,38 @@ class SalesWindow(QWidget):
         )
 
     # -----------------------
-    # Productos  ← usa products_repo, sin SessionLocal en la UI
+    # Productos
+    # ✅ FIX #3: Carga atributos dentro de la sesión y guarda en cache de dicts
+    # (evita DetachedInstanceError al acceder a product.nombre fuera de sesión)
     # -----------------------
     def cargar_productos(self) -> None:
-        lista = listar_productos(texto="", incluir_inactivos=False)
-
-        self._productos = {p.id: p for p in lista}
-
-        self.cbo_producto.blockSignals(True)
+        self._productos_cache = []
         self.cbo_producto.clear()
-        for p in lista:
-            stock_txt = (
-                f"{int(p.stock_actual)}"
-                if float(p.stock_actual or 0).is_integer()
-                else f"{p.stock_actual:g}"
+
+        productos = listar_productos("", incluir_inactivos=False)
+        for p in productos:
+            entry = {
+                "id": p.id,
+                "nombre": p.nombre,
+                "stock_actual": float(p.stock_actual or 0.0),
+                "precio_venta": float(p.precio_venta or 0.0),
+            }
+            self._productos_cache.append(entry)
+            self.cbo_producto.addItem(
+                f"{p.nombre}  (Stock: {entry['stock_actual']:.0f})", p.id
             )
-            self.cbo_producto.addItem(f"{p.nombre}  (Stock: {stock_txt})", p.id)
-        self.cbo_producto.blockSignals(False)
 
-        self._rellenar_precio()
+        # Auto-completar precio con el precio_venta del producto seleccionado
+        self.cbo_producto.currentIndexChanged.connect(self._autocompletar_precio)
+        self._autocompletar_precio(self.cbo_producto.currentIndex())
 
-    def _rellenar_precio(self) -> None:
+    def _autocompletar_precio(self, index: int) -> None:
         """Rellena el spinbox de precio con el precio_venta del producto seleccionado."""
-        product_id = self.cbo_producto.currentData()
-        if not product_id:
+        if index < 0 or index >= len(self._productos_cache):
             return
-        p = self._productos.get(int(product_id))
-        if p:
-            self.sp_precio.setValue(float(p.precio_venta or 0.0))
+        precio = self._productos_cache[index]["precio_venta"]
+        if precio > 0:
+            self.sp_precio.setValue(precio)
 
     # -----------------------
     # Historial / Detalle
@@ -180,10 +182,8 @@ class SalesWindow(QWidget):
         for s in ventas:
             row = self.tbl_hist.rowCount()
             self.tbl_hist.insertRow(row)
-
             self.tbl_hist.setItem(row, 0, QTableWidgetItem(str(s.id)))
             self.tbl_hist.setItem(row, 1, QTableWidgetItem(fmt_fecha(s.fecha)))
-
             estado = " (ANULADA)" if getattr(s, "anulada", False) else ""
             self.tbl_hist.setItem(
                 row,
@@ -202,7 +202,8 @@ class SalesWindow(QWidget):
         if not sale_id_item:
             return
 
-        sale = obtener_venta_con_detalle(int(sale_id_item.text()))
+        sale_id = int(sale_id_item.text())
+        sale = obtener_venta_con_detalle(sale_id)
         if not sale:
             return
 
@@ -210,7 +211,6 @@ class SalesWindow(QWidget):
         for d in sale.details:
             r = self.tbl_det.rowCount()
             self.tbl_det.insertRow(r)
-
             nombre = d.product.nombre if d.product else f"ID {d.product_id}"
             self.tbl_det.setItem(r, 0, QTableWidgetItem(nombre))
             self.tbl_det.setItem(r, 1, QTableWidgetItem(f"{float(d.cantidad):.2f}"))
@@ -241,24 +241,6 @@ class SalesWindow(QWidget):
             QMessageBox.warning(self, "Ventas", "El precio no puede ser negativo.")
             return
 
-        # Validar stock disponible antes de agregar a la lista
-        p = self._productos.get(product_id)
-        if p:
-            stock = float(getattr(p, "stock_actual", 0.0) or 0.0)
-            ya_en_lista = sum(
-                float(i["cantidad"])
-                for i in self.items
-                if int(i["product_id"]) == product_id
-            )
-            if (ya_en_lista + cantidad) > stock:
-                QMessageBox.warning(
-                    self,
-                    "Stock insuficiente",
-                    f"Stock disponible para '{p.nombre}': {stock:g}\n"
-                    f"Ya en lista: {ya_en_lista:g}  +  Nuevo: {cantidad:g} = {ya_en_lista + cantidad:g}",
-                )
-                return
-
         subtotal = cantidad * precio
         self.items.append(
             {"product_id": product_id, "cantidad": cantidad, "precio_venta": precio}
@@ -286,7 +268,9 @@ class SalesWindow(QWidget):
         self.actualizar_total()
 
     def actualizar_total(self) -> None:
-        total = sum(float(i["cantidad"]) * float(i["precio_venta"]) for i in self.items)
+        total = sum(
+            float(it["cantidad"]) * float(it["precio_venta"]) for it in self.items
+        )
         self.lbl_total.setText(f"Total: {self._fmt_money(total)}")
 
     # -----------------------
@@ -308,9 +292,7 @@ class SalesWindow(QWidget):
         QMessageBox.information(
             self,
             "Venta guardada",
-            f"Venta #{sale.id} guardada.\n"
-            f"Total: {self._fmt_money(float(sale.total))}\n"
-            f"Método: {metodo}",
+            f"Venta #{sale.id} guardada.\nTotal: {self._fmt_money(float(sale.total))}\nMétodo: {metodo}",
         )
 
         self.items.clear()
@@ -330,16 +312,15 @@ class SalesWindow(QWidget):
             return
 
         sale_id = int(sale_id_item.text())
-        metodo = self.cbo_metodo.currentText()
-
         confirm = QMessageBox.question(
             self,
             "Confirmar anulación",
-            f"¿Anular la venta #{sale_id}?\n"
-            f"Esto devolverá el stock y registrará EGRESO en caja.",
+            f"¿Anular la venta #{sale_id}?\nEsto devolverá el stock y registrará EGRESO en caja.",
         )
         if confirm != QMessageBox.Yes:
             return
+
+        metodo = self.cbo_metodo.currentText()
 
         try:
             anular_venta(sale_id, motivo="Anulada desde UI", metodo_pago=metodo)
@@ -348,9 +329,7 @@ class SalesWindow(QWidget):
             return
 
         QMessageBox.information(
-            self,
-            "OK",
-            f"Venta #{sale_id} anulada. Stock devuelto y caja actualizada.",
+            self, "OK", f"Venta #{sale_id} anulada. Stock devuelto y caja actualizada."
         )
         self.cargar_historial()
         self.cargar_productos()

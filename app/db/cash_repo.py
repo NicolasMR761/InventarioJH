@@ -19,7 +19,6 @@ def _dt_range(d: date):
 
 
 def _to_dt_start(x) -> datetime | None:
-    """Convierte date/datetime -> datetime (inicio de día)."""
     if x is None:
         return None
     if isinstance(x, datetime):
@@ -30,7 +29,6 @@ def _to_dt_start(x) -> datetime | None:
 
 
 def _to_dt_end(x) -> datetime | None:
-    """Convierte date/datetime -> datetime (fin de día)."""
     if x is None:
         return None
     if isinstance(x, datetime):
@@ -47,7 +45,6 @@ def _apply_filters(
     tipo: str | None = None,
     q: str | None = None,
 ):
-    """Aplica filtros consistentes (se usa en listar/contar)."""
     d1 = _to_dt_start(fecha_desde)
     d2 = _to_dt_end(fecha_hasta)
 
@@ -72,6 +69,29 @@ def _apply_filters(
     return query
 
 
+def _validar_movimiento(
+    tipo: str, concepto: str, monto: float
+) -> tuple[str, str, float]:
+    """
+    Valida y normaliza tipo, concepto y monto.
+    ✅ FIX #2: concepto no puede quedar vacío (campo NOT NULL en DB).
+    Lanza ValueError con mensaje claro en lugar de error de integridad de SQLite.
+    """
+    tipo = (tipo or "").strip().upper()
+    if tipo not in ("INGRESO", "EGRESO"):
+        raise ValueError("Tipo inválido. Use INGRESO o EGRESO.")
+
+    monto = float(monto or 0)
+    if monto <= 0:
+        raise ValueError("El monto debe ser mayor a 0.")
+
+    concepto = (concepto or "").strip()
+    if not concepto:
+        raise ValueError("El concepto no puede estar vacío.")
+
+    return tipo, concepto, monto
+
+
 # ----------------------------
 # Cierres
 # ----------------------------
@@ -90,10 +110,6 @@ def obtener_cierre(d: date) -> CashClosure | None:
 # Saldos / Listados
 # ----------------------------
 def obtener_saldo(hasta: datetime | None = None) -> float:
-    """
-    Saldo = sum(INGRESO) - sum(EGRESO).
-    Si hasta viene, calcula saldo acumulado hasta esa fecha/hora (incluye <= hasta).
-    """
     with SessionLocal() as db:
         q = db.query(CashMovement)
         if hasta is not None:
@@ -121,13 +137,6 @@ def listar_movimientos(
     tipo: str | None = None,
     q: str | None = None,
 ) -> list[CashMovement]:
-    """
-    Lista movimientos con filtros + paginación:
-    - fecha_desde/fecha_hasta: date o datetime
-    - tipo: INGRESO/EGRESO
-    - q: texto (concepto/referencia/observacion)
-    - offset/limit: paginación
-    """
     with SessionLocal() as db:
         query = db.query(CashMovement).order_by(CashMovement.id.desc())
         query = _apply_filters(query, fecha_desde, fecha_hasta, tipo, q)
@@ -140,7 +149,6 @@ def contar_movimientos(
     tipo: str | None = None,
     q: str | None = None,
 ) -> int:
-    """Cuenta movimientos con los mismos filtros de listar_movimientos."""
     with SessionLocal() as db:
         query = db.query(CashMovement)
         query = _apply_filters(query, fecha_desde, fecha_hasta, tipo, q)
@@ -158,15 +166,7 @@ def registrar_movimiento(
     observacion: str | None = None,
     fecha: datetime | None = None,
 ) -> CashMovement:
-    """
-    Registra movimiento en caja (transacción propia).
-    BLOQUEA si el día está cerrado.
-    """
-    tipo = (tipo or "").strip().upper()
-    if tipo not in ("INGRESO", "EGRESO"):
-        raise ValueError("Tipo inválido. Use INGRESO o EGRESO.")
-    if float(monto or 0) <= 0:
-        raise ValueError("Monto debe ser > 0.")
+    tipo, concepto, monto = _validar_movimiento(tipo, concepto, monto)
 
     fecha = fecha or datetime.now()
     dia = fecha.date()
@@ -179,8 +179,8 @@ def registrar_movimiento(
     with SessionLocal() as db:
         mov = CashMovement(
             tipo=tipo,
-            concepto=(concepto or "").strip() or ("Movimiento " + tipo),
-            monto=float(monto),
+            concepto=concepto,
+            monto=monto,
             referencia=(referencia or "").strip() or None,
             observacion=(observacion or "").strip() or None,
             fecha=fecha,
@@ -192,7 +192,7 @@ def registrar_movimiento(
 
 
 # ----------------------------
-# Registrar movimiento dentro de otra transacción (ventas/entradas)
+# Registrar movimiento dentro de otra transacción
 # ----------------------------
 def registrar_movimiento_en_db(
     db,
@@ -203,15 +203,7 @@ def registrar_movimiento_en_db(
     observacion: str | None = None,
     fecha: datetime | None = None,
 ) -> CashMovement:
-    """
-    Registra movimiento usando el mismo 'db' (misma transacción).
-    También BLOQUEA si el día está cerrado.
-    """
-    tipo = (tipo or "").strip().upper()
-    if tipo not in ("INGRESO", "EGRESO"):
-        raise ValueError("Tipo inválido. Use INGRESO o EGRESO.")
-    if float(monto or 0) <= 0:
-        raise ValueError("Monto debe ser > 0.")
+    tipo, concepto, monto = _validar_movimiento(tipo, concepto, monto)
 
     fecha = fecha or datetime.now()
     dia = fecha.date()
@@ -224,8 +216,8 @@ def registrar_movimiento_en_db(
 
     mov = CashMovement(
         tipo=tipo,
-        concepto=(concepto or "").strip() or ("Movimiento " + tipo),
-        monto=float(monto),
+        concepto=concepto,
+        monto=monto,
         referencia=(referencia or "").strip() or None,
         observacion=(observacion or "").strip() or None,
         fecha=fecha,
@@ -238,12 +230,6 @@ def registrar_movimiento_en_db(
 # Resumen + Cierre diario
 # ----------------------------
 def resumen_del_dia(d: date) -> dict:
-    """
-    Retorna:
-    - ingresos, egresos del día
-    - saldo_inicial (saldo hasta el día anterior 23:59:59)
-    - saldo_final (saldo_inicial + ingresos - egresos)
-    """
     start, end = _dt_range(d)
 
     with SessionLocal() as db:
@@ -277,7 +263,6 @@ def resumen_del_dia(d: date) -> dict:
 
 
 def cerrar_dia(d: date, cerrado_por: str | None = None) -> CashClosure:
-    """Crea un cierre diario. Si ya existe, error."""
     if esta_cerrado(d):
         raise ValueError(f"El día {d} ya está cerrado.")
 
@@ -299,12 +284,6 @@ def cerrar_dia(d: date, cerrado_por: str | None = None) -> CashClosure:
 
 
 def resumen_rango(d1: date, d2: date) -> dict:
-    """
-    Resumen de un rango de fechas (incluye días completos).
-    - saldo_inicial: saldo justo antes de d1
-    - ingresos/egresos: sumas del rango
-    - saldo_final: saldo_inicial + ingresos - egresos
-    """
     if d2 < d1:
         d1, d2 = d2, d1
 

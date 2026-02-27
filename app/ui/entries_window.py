@@ -47,7 +47,7 @@ class EntriesWindow(QWidget):
         pago = QHBoxLayout()
 
         self.chk_pagado = QCheckBox("Pagado (sale de caja)")
-        self.chk_pagado.setChecked(True)  # por defecto, compras pagadas
+        self.chk_pagado.setChecked(True)
         pago.addWidget(self.chk_pagado)
 
         pago.addWidget(QLabel("Método:"))
@@ -60,7 +60,6 @@ class EntriesWindow(QWidget):
         pago.addStretch()
         layout.addLayout(pago)
 
-        # ✅ NUEVO: deshabilitar método cuando NO está pagado
         self.chk_pagado.toggled.connect(self._toggle_metodo_pago)
         self._toggle_metodo_pago(self.chk_pagado.isChecked())
 
@@ -85,7 +84,6 @@ class EntriesWindow(QWidget):
 
         layout.addLayout(bottom)
 
-        # Data cache
         self._productos = []
         self._proveedores = []
 
@@ -94,12 +92,10 @@ class EntriesWindow(QWidget):
 
         self.table.cellChanged.connect(self.recalcular_totales)
 
-    # ✅ NUEVO
     def _toggle_metodo_pago(self, checked: bool):
         self.cbo_metodo.setEnabled(bool(checked))
 
     def cargar_data(self):
-        # Solo activos para entradas
         self._proveedores = [
             s for s in listar_proveedores("", incluir_inactivos=True) if s.activo
         ]
@@ -141,19 +137,63 @@ class EntriesWindow(QWidget):
 
     def _parse_float(self, s: str) -> float:
         """
-        Permite entradas como:
-        - 5000
-        - 5000.5
-        - 5.000
-        - 5.000,50
-        - $5.000,50
+        Convierte texto a float tolerando formatos colombianos y anglosajones.
+
+        Reglas:
+        - Se eliminan $ y espacios siempre.
+        - Si contiene TANTO punto COMO coma:
+            * Formato "5.000,50"  -> miles=punto, decimal=coma  -> 5000.50
+            * Formato "5,000.50"  -> miles=coma,  decimal=punto -> 5000.50
+          Se detecta cuál símbolo aparece ÚLTIMO (ese es el decimal).
+        - Si solo contiene coma: se trata como decimal -> "5,5" -> 5.5
+        - Si solo contiene punto:
+            * Si tiene exactamente 3 dígitos tras el punto -> separador de miles -> "5.000" -> 5000
+            * De lo contrario -> decimal -> "5.5" -> 5.5  /  "15.50" -> 15.50
+        - Si no contiene ninguno: conversión directa.
         """
         try:
             raw = (s or "0").strip()
             raw = raw.replace("$", "").replace(" ", "")
-            raw = raw.replace(".", "")  # miles
-            raw = raw.replace(",", ".")  # decimal
+
+            if not raw:
+                return 0.0
+
+            has_dot = "." in raw
+            has_comma = "," in raw
+
+            if has_dot and has_comma:
+                # El último separador es el decimal
+                last_dot = raw.rfind(".")
+                last_comma = raw.rfind(",")
+                if last_comma > last_dot:
+                    # "5.000,50" -> miles=punto, decimal=coma
+                    raw = raw.replace(".", "").replace(",", ".")
+                else:
+                    # "5,000.50" -> miles=coma, decimal=punto
+                    raw = raw.replace(",", "")
+
+            elif has_comma and not has_dot:
+                # Solo coma -> decimal colombiano: "5,5" -> "5.5"
+                raw = raw.replace(",", ".")
+
+            elif has_dot and not has_comma:
+                # Solo punto: decidir si es miles o decimal
+                parts = raw.split(".")
+                # Si hay exactamente una parte decimal de 3 dígitos -> miles
+                # Ej: "5.000" -> parts=["5","000"] -> miles
+                # Ej: "5.5"   -> parts=["5","5"]   -> decimal
+                # Ej: "15.50" -> parts=["15","50"]  -> decimal
+                if (
+                    len(parts) == 2
+                    and len(parts[1]) == 3
+                    and parts[0].isdigit()
+                    and parts[1].isdigit()
+                ):
+                    raw = raw.replace(".", "")
+                # else: mantener el punto como decimal
+
             return float(raw)
+
         except Exception:
             return 0.0
 
@@ -178,7 +218,7 @@ class EntriesWindow(QWidget):
         return total
 
     def recalcular_totales(self):
-        self.table.blockSignals(True)  # ✅ evita el loop
+        self.table.blockSignals(True)
 
         total = 0.0
         for row in range(self.table.rowCount()):
@@ -192,13 +232,12 @@ class EntriesWindow(QWidget):
             subtotal = max(cantidad, 0.0) * max(precio, 0.0)
             total += subtotal
 
-            # ✅ CAMBIO: mostrar subtotal con formato de dinero
             item = QTableWidgetItem(self._fmt_money(subtotal))
             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row, 3, item)
 
         self.lbl_total.setText(f"Total: {self._fmt_money(total)}")
-        self.table.blockSignals(False)  # ✅ reactivar señales
+        self.table.blockSignals(False)
 
     def guardar(self):
         supplier_id = self.cbo_supplier.currentData()
@@ -258,7 +297,6 @@ class EntriesWindow(QWidget):
             return
 
         try:
-            # 1) Crear entrada (esto suma stock y guarda detalles)
             entry = crear_entrada(
                 supplier_id=supplier_id,
                 items=items,
@@ -266,7 +304,6 @@ class EntriesWindow(QWidget):
                 metodo_pago=self.cbo_metodo.currentText(),
             )
 
-            # 3) UX
             msg = f"Entrada #{entry.id} guardada. Stock actualizado."
             if self.chk_pagado.isChecked():
                 msg += " Caja actualizada (EGRESO)."
@@ -279,7 +316,6 @@ class EntriesWindow(QWidget):
             QMessageBox.critical(self, "Error", f"No se pudo guardar la entrada:\n{e}")
             return
 
-        # Reset
         self.table.setRowCount(0)
         self.agregar_fila()
         self.recalcular_totales()

@@ -3,7 +3,43 @@ from __future__ import annotations
 from app.db.database import SessionLocal
 from app.db.models import Entry, EntryDetail, Product, Supplier
 from app.db.cash_repo import registrar_movimiento_en_db
-from app.utils.formatters import fmt_cop, fmt_qty  # ← centralizado
+
+
+def _fmt_cop_simple(value: float) -> str:
+    try:
+        s = "${:,.0f}".format(float(value or 0.0))
+        return s.replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "$0"
+
+
+def _fmt_qty(value: float) -> str:
+    try:
+        v = float(value)
+    except Exception:
+        return "0"
+    return f"{int(v)}" if v.is_integer() else f"{v:g}"
+
+
+def _calcular_costo_promedio(
+    stock_actual: float,
+    costo_promedio_actual: float,
+    cantidad_nueva: float,
+    precio_nuevo: float,
+) -> float:
+    """
+    Costo Promedio Ponderado (CPP):
+    nuevo_costo = (stock_actual * costo_actual + cantidad_nueva * precio_nuevo)
+                  / (stock_actual + cantidad_nueva)
+
+    Si no hay stock previo, el costo promedio es simplemente el precio nuevo.
+    """
+    stock_total = stock_actual + cantidad_nueva
+    if stock_total <= 0:
+        return float(precio_nuevo)
+    return (
+        (stock_actual * costo_promedio_actual) + (cantidad_nueva * precio_nuevo)
+    ) / stock_total
 
 
 def crear_entrada(
@@ -17,8 +53,11 @@ def crear_entrada(
         {"product_id": 1, "cantidad": 2, "precio_compra": 3500},
         ...
     ]
-    Crea entry + details, suma stock_actual a Product.
-    Si pagado=True => registra EGRESO en caja (misma transacción).
+
+    - Crea entry + details
+    - Suma stock_actual a Product
+    - ✅ Actualiza costo_promedio ponderado en Product
+    - Si pagado=True => registra EGRESO en caja (misma transacción)
     """
     if not items:
         raise ValueError("La entrada debe tener al menos 1 producto.")
@@ -67,14 +106,20 @@ def crear_entrada(
                 )
                 entry.details.append(detail)
 
-                # Línea de detalle para Caja — usa formatters centralizados
                 detalles_txt.append(
-                    f"{product.nombre} x{fmt_qty(cantidad)} a {fmt_cop(precio)} c/u"
+                    f"{product.nombre} x{_fmt_qty(cantidad)} a {_fmt_cop_simple(precio)} c/u"
                 )
 
-                # Actualizar stock
-                stock = float(getattr(product, "stock_actual", 0.0) or 0.0)
-                product.stock_actual = stock + cantidad
+                # ✅ FIX: Costo Promedio Ponderado antes de sumar el stock
+                stock_actual = float(getattr(product, "stock_actual", 0.0) or 0.0)
+                costo_actual = float(getattr(product, "costo_promedio", 0.0) or 0.0)
+
+                product.costo_promedio = _calcular_costo_promedio(
+                    stock_actual, costo_actual, cantidad, precio
+                )
+
+                # Actualiza stock
+                product.stock_actual = stock_actual + cantidad
 
             entry.total = float(total)
             db.add(entry)

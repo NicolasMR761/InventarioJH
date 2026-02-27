@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from app.db.database import SessionLocal
@@ -11,11 +11,11 @@ from app.db.models import Entry, EntryDetail, Sale, SaleDetail, Supplier
 class KardexRow:
     fecha: datetime
     tipo: str  # ENTRADA | VENTA | ANULACION
-    referencia: str  # "Compra #3 (Proveedor)" | "Venta #10"
+    referencia: str
     cantidad: float  # + entra, - sale
-    precio: float  # precio compra o venta
-    subtotal: float  # subtotal línea
-    saldo: float = 0.0  # se calcula
+    precio: float
+    subtotal: float
+    saldo: float = 0.0
 
 
 def obtener_kardex(
@@ -27,19 +27,19 @@ def obtener_kardex(
     Retorna:
       {
         "saldo_inicial": float,
-        "rows": list[KardexRow]
+        "rows": list[KardexRow],
+        "advertencias": list[str]   ← ✅ FIX #3: avisa ventas con anulación fuera del rango
       }
 
     Regla para ventas anuladas:
       - registra la VENTA en sale.fecha (cantidad negativa)
       - registra la ANULACION en sale.anulada_en (cantidad positiva)
+      - Si la VENTA está dentro del rango pero la ANULACION cae fuera (o viceversa),
+        se genera una advertencia para que la UI informe al usuario.
     """
     pid = int(product_id)
 
     with SessionLocal() as db:
-        # -------------------------
-        # 1) Entradas (compras)
-        # -------------------------
         compras = (
             db.query(
                 Entry.fecha,
@@ -55,9 +55,6 @@ def obtener_kardex(
             .all()
         )
 
-        # -------------------------
-        # 2) Ventas
-        # -------------------------
         ventas = (
             db.query(
                 Sale.fecha,
@@ -74,6 +71,7 @@ def obtener_kardex(
         )
 
     movimientos: list[KardexRow] = []
+    advertencias: list[str] = []
 
     # Compras -> ENTRADA (+)
     for fecha, entry_id, proveedor, cant, precio, sub in compras:
@@ -88,7 +86,7 @@ def obtener_kardex(
             )
         )
 
-    # Ventas -> VENTA (-) y si anulada -> ANULACION (+) en anulada_en
+    # Ventas -> VENTA (-) y si anulada -> ANULACION (+)
     for fecha, sale_id, anulada, anulada_en, cant, precio, sub in ventas:
         cant = float(cant or 0.0)
         precio = float(precio or 0.0)
@@ -117,6 +115,31 @@ def obtener_kardex(
                 )
             )
 
+            # ✅ FIX #3: Detectar si VENTA y ANULACION quedan en lados opuestos del rango
+            if desde or hasta:
+                venta_en_rango = True
+                anulacion_en_rango = True
+
+                if desde:
+                    venta_en_rango = venta_en_rango and (fecha >= desde)
+                    anulacion_en_rango = anulacion_en_rango and (anulada_en >= desde)
+                if hasta:
+                    venta_en_rango = venta_en_rango and (fecha <= hasta)
+                    anulacion_en_rango = anulacion_en_rango and (anulada_en <= hasta)
+
+                if venta_en_rango and not anulacion_en_rango:
+                    advertencias.append(
+                        f"⚠️ Venta #{sale_id} aparece en el rango pero su anulación "
+                        f"({anulada_en.strftime('%d/%m/%Y')}) cae fuera. "
+                        f"El saldo puede aparecer más bajo de lo real."
+                    )
+                elif anulacion_en_rango and not venta_en_rango:
+                    advertencias.append(
+                        f"⚠️ Anulación de Venta #{sale_id} aparece en el rango pero la venta original "
+                        f"({fecha.strftime('%d/%m/%Y')}) cae fuera. "
+                        f"El saldo puede aparecer más alto de lo real."
+                    )
+
     # Orden cronológico
     movimientos.sort(key=lambda r: (r.fecha or datetime.min, r.tipo))
 
@@ -136,10 +159,14 @@ def obtener_kardex(
             continue
         rows.append(r)
 
-    # Calcular saldo acumulado desde saldo_inicial
+    # Calcular saldo acumulado
     saldo = saldo_inicial
     for r in rows:
         saldo += float(r.cantidad or 0.0)
         r.saldo = saldo
 
-    return {"saldo_inicial": saldo_inicial, "rows": rows}
+    return {
+        "saldo_inicial": saldo_inicial,
+        "rows": rows,
+        "advertencias": advertencias,
+    }
