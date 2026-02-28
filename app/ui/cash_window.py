@@ -214,34 +214,159 @@ class CashWindow(QWidget):
         fecha_txt = ""
         if getattr(m, "fecha", None):
             try:
-                fecha_txt = m.fecha.strftime("%Y-%m-%d %H:%M")
+                fecha_txt = m.fecha.strftime("%d/%m/%Y  %H:%M")
             except Exception:
                 fecha_txt = str(m.fecha)
 
-        detalle = (
-            f"ID: {m.id}\n"
-            f"Fecha: {fecha_txt}\n"
-            f"Tipo: {m.tipo or ''}\n"
-            f"Concepto: {m.concepto or ''}\n"
-            f"Monto: {_fmt_cop(m.monto or 0.0)}\n"
-            f"Referencia: {m.referencia or ''}\n"
-            f"Observación:\n{m.observacion or ''}"
+        es_ingreso = (m.tipo or "").upper() == "INGRESO"
+        color_tipo = "#22c55e" if es_ingreso else "#ef4444"
+        label_tipo = "INGRESO" if es_ingreso else "EGRESO"
+        emoji_tipo = "↑" if es_ingreso else "↓"
+
+        # Observación: cada línea como ítem
+        obs_raw = (m.observacion or "").strip()
+        obs_lines = obs_raw.split("\n") if obs_raw else []
+        obs_html = (
+            "".join(
+                f"<tr><td style='padding:5px 0;color:#cbd5e1;font-size:13px;border-bottom:1px solid #1e293b;'>{ln}</td></tr>"
+                for ln in obs_lines
+            )
+            if obs_lines
+            else "<tr><td style='color:#475569;font-size:12px;'>Sin detalle</td></tr>"
         )
 
+        ref_txt = (m.referencia or "—").strip()
+
+        html = f"""
+        <html><body style='margin:0;padding:0;background:#0a0f1e;font-family:"Segoe UI",Arial,sans-serif;'>
+        <div style='background:#0a0f1e;padding:0 0 8px 0;'>
+
+            <!-- BANDA SUPERIOR DE COLOR -->
+            <div style='background:linear-gradient(135deg,{color_tipo}cc,{color_tipo}66);
+                        padding:20px 28px 16px 28px;margin-bottom:0;'>
+                <div style='font-size:10px;color:rgba(255,255,255,0.65);letter-spacing:3px;
+                            text-transform:uppercase;margin-bottom:6px;'>
+                    INVENTARIO JH &nbsp;·&nbsp; Comprobante Interno
+                </div>
+                <div style='font-size:24px;font-weight:800;color:#ffffff;
+                            letter-spacing:-0.5px;line-height:1.2;'>
+                    {m.concepto or "Sin concepto"}
+                </div>
+                <div style='margin-top:10px;display:flex;align-items:center;gap:8px;'>
+                    <span style='background:rgba(0,0,0,0.3);color:#fff;
+                                 padding:3px 12px;border-radius:20px;font-size:11px;
+                                 font-weight:700;letter-spacing:1.5px;'>
+                        {emoji_tipo} {label_tipo}
+                    </span>
+                    <span style='color:rgba(255,255,255,0.55);font-size:11px;'>
+                        Ref: {ref_txt}
+                    </span>
+                </div>
+            </div>
+
+            <!-- MONTO -->
+            <div style='background:#0f172a;padding:20px 28px;
+                        border-bottom:1px solid #1e293b;'>
+                <div style='font-size:10px;color:#475569;letter-spacing:3px;
+                            margin-bottom:4px;text-transform:uppercase;'>Monto total</div>
+                <div style='font-size:36px;font-weight:900;color:{color_tipo};
+                            letter-spacing:-1px;'>
+                    {_fmt_cop(m.monto or 0.0)}
+                </div>
+            </div>
+
+            <!-- DATOS -->
+            <div style='padding:16px 28px;border-bottom:1px solid #1e293b;'>
+                <table width='100%' cellspacing='0' cellpadding='0'>
+                    <tr>
+                        <td style='padding:6px 0;color:#475569;font-size:11px;
+                                   text-transform:uppercase;letter-spacing:1px;width:38%;'>
+                            N° Registro</td>
+                        <td style='padding:6px 0;color:#e2e8f0;font-size:13px;
+                                   font-weight:600;'>#{m.id}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding:6px 0;color:#475569;font-size:11px;
+                                   text-transform:uppercase;letter-spacing:1px;'>Fecha</td>
+                        <td style='padding:6px 0;color:#e2e8f0;font-size:13px;
+                                   font-weight:600;'>{fecha_txt}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding:6px 0;color:#475569;font-size:11px;
+                                   text-transform:uppercase;letter-spacing:1px;'>Referencia</td>
+                        <td style='padding:6px 0;color:#e2e8f0;font-size:13px;
+                                   font-weight:600;'>{ref_txt}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- DETALLE -->
+            <div style='padding:14px 28px 8px 28px;'>
+                <div style='font-size:10px;color:#475569;letter-spacing:2px;
+                            text-transform:uppercase;margin-bottom:10px;'>Detalle</div>
+                <table width='100%' cellspacing='0' cellpadding='0'>
+                    {obs_html}
+                </table>
+            </div>
+
+        </div>
+        </body></html>
+        """
+
         dlg = QDialog(self)
-        dlg.setWindowTitle("Detalle del movimiento")
-        dlg.resize(520, 360)
+        dlg.setWindowTitle(f"Comprobante #{m.id}")
+        dlg.setFixedWidth(480)
+        dlg.setStyleSheet("background: #0f172a;")
+
         lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(0, 0, 0, 12)
+        lay.setSpacing(0)
 
         txt = QTextEdit()
         txt.setReadOnly(True)
-        txt.setPlainText(detalle)
+        txt.setHtml(html)
+        txt.setStyleSheet(
+            """
+            QTextEdit {
+                background: #0f172a;
+                border: none;
+                color: #e2e8f0;
+            }
+            QScrollBar:vertical {
+                background: #0f172a;
+                width: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #334155;
+                border-radius: 3px;
+            }
+        """
+        )
+        txt.setMinimumHeight(460)
         lay.addWidget(txt)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Close)
-        buttons.rejected.connect(dlg.reject)
-        buttons.accepted.connect(dlg.accept)
-        lay.addWidget(buttons)
+        btn_cerrar = QPushButton("Cerrar")
+        btn_cerrar.setFixedWidth(120)
+        btn_cerrar.setStyleSheet(
+            """
+            QPushButton {
+                background: #1e3a5f;
+                color: #e2e8f0;
+                border: 1px solid #2563eb;
+                border-radius: 6px;
+                padding: 7px 0;
+                font-weight: 700;
+            }
+            QPushButton:hover { background: #2563eb; }
+        """
+        )
+        btn_cerrar.clicked.connect(dlg.accept)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        row.addWidget(btn_cerrar)
+        row.addStretch()
+        lay.addLayout(row)
 
         dlg.exec()
 
@@ -284,9 +409,6 @@ class CashWindow(QWidget):
             else:
                 self.lbl_estado.setText("")
 
-            saldo = obtener_saldo()
-            self.lbl_saldo.setText(f"Saldo: {_fmt_cop(saldo)}")
-
             if d1 == d2:
                 data = resumen_del_dia(d1)
             else:
@@ -295,8 +417,11 @@ class CashWindow(QWidget):
             ingresos = float(data["ingresos"] or 0.0)
             egresos = float(data["egresos"] or 0.0)
             balance = ingresos - egresos
+
+            # Saldo = balance del período filtrado
+            self.lbl_saldo.setText(f"Saldo: {_fmt_cop(balance)}")
             self.lbl_resumen.setText(
-                f"Balance: {_fmt_cop(balance)}  |  Ingresos: {_fmt_cop(ingresos)}  |  Egresos: {_fmt_cop(egresos)}"
+                f"Ingresos: {_fmt_cop(ingresos)}  |  Egresos: {_fmt_cop(egresos)}"
             )
 
             self.total_count = contar_movimientos(

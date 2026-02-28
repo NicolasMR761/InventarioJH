@@ -47,6 +47,7 @@ def crear_entrada(
     items: list[dict],
     pagado: bool = True,
     metodo_pago: str = "Efectivo",
+    numero_factura: str | None = None,
 ) -> Entry:
     """
     items = [
@@ -72,7 +73,11 @@ def crear_entrada(
         if not supplier.activo:
             raise ValueError("Proveedor inactivo. Actívalo para usarlo.")
 
-        entry = Entry(supplier_id=supplier_id, total=0.0)
+        entry = Entry(
+            supplier_id=supplier_id,
+            total=0.0,
+            numero_factura=(numero_factura or "").strip() or None,
+        )
         total = 0.0
         detalles_txt: list[str] = []
 
@@ -126,7 +131,12 @@ def crear_entrada(
             db.flush()
 
             if pagado:
-                concepto = f"Compra (Entrada #{entry.id}) - {supplier.nombre}"
+                fac_txt = (
+                    f" | Factura: {entry.numero_factura}"
+                    if entry.numero_factura
+                    else ""
+                )
+                concepto = f"Compra (Entrada #{entry.id}) - {supplier.nombre}{fac_txt}"
                 observacion = "\n".join(detalles_txt).strip() if detalles_txt else None
                 if metodo_pago:
                     observacion = (

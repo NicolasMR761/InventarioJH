@@ -111,20 +111,20 @@ def obtener_cierre(d: date) -> CashClosure | None:
 # ----------------------------
 def obtener_saldo(hasta: datetime | None = None) -> float:
     with SessionLocal() as db:
-        q = db.query(CashMovement)
-        if hasta is not None:
-            q = q.filter(CashMovement.fecha <= hasta)
+        # ✅ FIX: queries separados para evitar acumulación de filtros en SQLAlchemy
+        q_ingresos = db.query(func.coalesce(func.sum(CashMovement.monto), 0.0)).filter(
+            CashMovement.tipo == "INGRESO"
+        )
+        q_egresos = db.query(func.coalesce(func.sum(CashMovement.monto), 0.0)).filter(
+            CashMovement.tipo == "EGRESO"
+        )
 
-        ingresos = (
-            q.filter(CashMovement.tipo == "INGRESO")
-            .with_entities(func.coalesce(func.sum(CashMovement.monto), 0.0))
-            .scalar()
-        )
-        egresos = (
-            q.filter(CashMovement.tipo == "EGRESO")
-            .with_entities(func.coalesce(func.sum(CashMovement.monto), 0.0))
-            .scalar()
-        )
+        if hasta is not None:
+            q_ingresos = q_ingresos.filter(CashMovement.fecha <= hasta)
+            q_egresos = q_egresos.filter(CashMovement.fecha <= hasta)
+
+        ingresos = q_ingresos.scalar()
+        egresos = q_egresos.scalar()
 
         return float(ingresos or 0.0) - float(egresos or 0.0)
 

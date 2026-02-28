@@ -43,6 +43,20 @@ class EntriesWindow(QWidget):
         top.addStretch()
         layout.addLayout(top)
 
+        # --- Número de factura (obligatorio) ---
+        fac_row = QHBoxLayout()
+        from PySide6.QtWidgets import QLineEdit
+
+        fac_row.addWidget(QLabel("N° Factura:"))
+        self.txt_factura = QLineEdit()
+        self.txt_factura.setPlaceholderText(
+            "Número de factura del proveedor (obligatorio)"
+        )
+        self.txt_factura.setMaximumWidth(280)
+        fac_row.addWidget(self.txt_factura)
+        fac_row.addStretch()
+        layout.addLayout(fac_row)
+
         # --- Pagado + Método ---
         pago = QHBoxLayout()
 
@@ -247,6 +261,14 @@ class EntriesWindow(QWidget):
             )
             return
 
+        numero_factura = self.txt_factura.text().strip()
+        if not numero_factura:
+            QMessageBox.warning(
+                self, "Campo obligatorio", "El número de factura es obligatorio."
+            )
+            self.txt_factura.setFocus()
+            return
+
         items = []
         for row in range(self.table.rowCount()):
             cbo = self.table.cellWidget(row, 0)
@@ -302,6 +324,7 @@ class EntriesWindow(QWidget):
                 items=items,
                 pagado=self.chk_pagado.isChecked(),
                 metodo_pago=self.cbo_metodo.currentText(),
+                numero_factura=numero_factura,
             )
 
             msg = f"Entrada #{entry.id} guardada. Stock actualizado."
