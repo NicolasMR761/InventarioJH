@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QDialogButtonBox,
     QMessageBox,
+    QCheckBox,
+    QHBoxLayout,
 )
 
 from app.db.products_repo import crear_producto, actualizar_producto
@@ -17,14 +19,26 @@ class ProductForm(QDialog):
         self.product = product
 
         self.setWindowTitle("Editar Producto" if self.product else "Nuevo Producto")
-        self.resize(400, 250)
+        self.resize(420, 280)
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
 
         self.txt_codigo = QLineEdit()
         self.txt_nombre = QLineEdit()
+
+        # ── Unidad con checkbox KG ──────────────────────────
+        unidad_row = QHBoxLayout()
         self.txt_unidad = QLineEdit("und")
+        self.txt_unidad.setMaximumWidth(80)
+        unidad_row.addWidget(self.txt_unidad)
+
+        self.chk_kg = QCheckBox("Kilogramo (kg)")
+        self.chk_kg.setToolTip("Activa para fijar la unidad en kg y vender por peso")
+        self.chk_kg.toggled.connect(self._toggle_kg)
+        unidad_row.addWidget(self.chk_kg)
+        unidad_row.addStretch()
+        # ────────────────────────────────────────────────────
 
         self.sp_precio = QDoubleSpinBox()
         self.sp_precio.setMaximum(10_000_000)
@@ -36,7 +50,7 @@ class ProductForm(QDialog):
 
         form.addRow("Código:", self.txt_codigo)
         form.addRow("Nombre:", self.txt_nombre)
-        form.addRow("Unidad:", self.txt_unidad)
+        form.addRow("Unidad:", unidad_row)
         form.addRow("Precio venta:", self.sp_precio)
         form.addRow("Stock mínimo:", self.sp_minimo)
 
@@ -50,10 +64,23 @@ class ProductForm(QDialog):
         if self.product:
             self._cargar_producto()
 
+    def _toggle_kg(self, checked: bool):
+        if checked:
+            self.txt_unidad.setText("kg")
+            self.txt_unidad.setEnabled(False)
+        else:
+            self.txt_unidad.setEnabled(True)
+            if self.txt_unidad.text().strip().lower() == "kg":
+                self.txt_unidad.setText("und")
+
     def _cargar_producto(self):
         self.txt_codigo.setText(self.product.codigo)
         self.txt_nombre.setText(self.product.nombre)
-        self.txt_unidad.setText(self.product.unidad or "und")
+        unidad = (self.product.unidad or "und").strip().lower()
+        if unidad == "kg":
+            self.chk_kg.setChecked(True)  # _toggle_kg se dispara automáticamente
+        else:
+            self.txt_unidad.setText(self.product.unidad or "und")
         self.sp_precio.setValue(float(self.product.precio_venta or 0.0))
         self.sp_minimo.setValue(float(self.product.stock_minimo or 0.0))
 
@@ -67,13 +94,19 @@ class ProductForm(QDialog):
             )
             return
 
+        unidad = (
+            "kg"
+            if self.chk_kg.isChecked()
+            else (self.txt_unidad.text().strip() or "und")
+        )
+
         try:
             if self.product:
                 actualizar_producto(
                     product_id=self.product.id,
                     codigo=codigo,
                     nombre=nombre,
-                    unidad=self.txt_unidad.text().strip() or "und",
+                    unidad=unidad,
                     precio_venta=self.sp_precio.value(),
                     stock_minimo=self.sp_minimo.value(),
                 )
@@ -81,7 +114,7 @@ class ProductForm(QDialog):
                 crear_producto(
                     codigo=codigo,
                     nombre=nombre,
-                    unidad=self.txt_unidad.text().strip() or "und",
+                    unidad=unidad,
                     precio_venta=self.sp_precio.value(),
                     stock_minimo=self.sp_minimo.value(),
                 )

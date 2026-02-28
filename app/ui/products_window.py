@@ -7,8 +7,11 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QLineEdit,
     QMessageBox,
+    QLabel,
+    QHeaderView,
+    QFrame,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QColor, QBrush, QFont
 
 from app.db.products_repo import listar_productos, cambiar_estado_producto
@@ -18,71 +21,231 @@ class ProductsWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Productos")
-        self.resize(900, 520)
+        self.resize(960, 580)
+        self.setStyleSheet(self._styles())
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(14)
 
-        top = QHBoxLayout()
+        # ── HEADER ──────────────────────────────────────────
+        header = QHBoxLayout()
+        header.setSpacing(0)
+
+        title_block = QVBoxLayout()
+        title_block.setSpacing(2)
+        lbl_title = QLabel("📦 Productos")
+        lbl_title.setObjectName("pageTitle")
+        lbl_sub = QLabel("Catálogo de productos · Stock en tiempo real")
+        lbl_sub.setObjectName("pageSub")
+        title_block.addWidget(lbl_title)
+        title_block.addWidget(lbl_sub)
+        header.addLayout(title_block, 1)
+
+        layout.addLayout(header)
+
+        # ── BARRA DE ACCIONES ────────────────────────────────
+        bar = QHBoxLayout()
+        bar.setSpacing(8)
 
         self.txt_buscar = QLineEdit()
-        self.txt_buscar.setPlaceholderText("Buscar por código o nombre...")
+        self.txt_buscar.setPlaceholderText("🔍  Buscar por código o nombre…")
+        self.txt_buscar.setObjectName("searchBox")
         self.txt_buscar.textChanged.connect(self.cargar_productos)
-        top.addWidget(self.txt_buscar)
+        bar.addWidget(self.txt_buscar, 1)
 
-        btn_refrescar = QPushButton("Refrescar")
-        btn_refrescar.clicked.connect(self.cargar_productos)
-        top.addWidget(btn_refrescar)
+        for label, obj_name, slot in [
+            ("↺  Refrescar", "btnSecondary", self.cargar_productos),
+            ("＋  Nuevo", "btnPrimary", self.abrir_form_nuevo),
+            ("✎  Editar", "btnSecondary", self.abrir_form_editar),
+            ("⏺  Activar/Desact.", "btnWarning", self.cambiar_estado_seleccionado),
+        ]:
+            btn = QPushButton(label)
+            btn.setObjectName(obj_name)
+            btn.clicked.connect(slot)
+            bar.addWidget(btn)
 
-        btn_nuevo = QPushButton("Nuevo")
-        btn_nuevo.clicked.connect(self.abrir_form_nuevo)
-        top.addWidget(btn_nuevo)
+        layout.addLayout(bar)
 
-        btn_editar = QPushButton("Editar")
-        btn_editar.clicked.connect(self.abrir_form_editar)
-        top.addWidget(btn_editar)
+        # ── SEPARADOR ───────────────────────────────────────
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setObjectName("separator")
+        layout.addWidget(sep)
 
-        btn_estado = QPushButton("Activar / Desactivar")
-        btn_estado.clicked.connect(self.cambiar_estado_seleccionado)
-        top.addWidget(btn_estado)
-
-        top.addStretch()
-        layout.addLayout(top)
-
+        # ── TABLA ───────────────────────────────────────────
         self.table = QTableWidget()
-        self.table.setColumnCount(8)
+        self.table.setObjectName("productTable")
+        self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
-            [
-                "ID",
-                "Código",
-                "Nombre",
-                "Unidad",
-                "Stock",
-                "Precio Venta",
-                "Costo Prom.",
-                "Activo",
-            ]
+            ["ID", "Código", "Nombre", "Unidad", "Stock", "Estado"]
         )
         self.table.setSortingEnabled(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setShowGrid(True)
+        self.table.setAlternatingRowColors(True)
         self.table.cellDoubleClicked.connect(self._dbl_click_editar)
-        layout.addWidget(self.table)
+
+        hh = self.table.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.Fixed)  # ID
+        hh.setSectionResizeMode(1, QHeaderView.Fixed)  # Código
+        hh.setSectionResizeMode(2, QHeaderView.Stretch)  # Nombre
+        hh.setSectionResizeMode(3, QHeaderView.Fixed)  # Unidad
+        hh.setSectionResizeMode(4, QHeaderView.Fixed)  # Stock
+        hh.setSectionResizeMode(5, QHeaderView.Fixed)  # Estado
+        self.table.setColumnWidth(0, 50)  # ID
+        self.table.setColumnWidth(1, 100)  # Código
+        self.table.setColumnWidth(3, 90)  # Unidad
+        self.table.setColumnWidth(4, 90)  # Stock
+        self.table.setColumnWidth(5, 110)  # Estado
+
+        layout.addWidget(self.table, 1)
+
+        # ── FOOTER: contador ────────────────────────────────
+        self.lbl_count = QLabel("")
+        self.lbl_count.setObjectName("footerLabel")
+        layout.addWidget(self.lbl_count)
 
         self._productos = []
         self.cargar_productos()
 
+    # ── ESTILOS ──────────────────────────────────────────────
+    def _styles(self) -> str:
+        return """
+        QWidget {
+            background: #0b1120;
+            color: #e2e8f0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            font-size: 13px;
+        }
+
+        #pageTitle {
+            font-size: 20px;
+            font-weight: 800;
+            color: #f1f5f9;
+            letter-spacing: -0.3px;
+        }
+        #pageSub {
+            font-size: 12px;
+            color: #475569;
+        }
+
+        #searchBox {
+            background: #111c33;
+            border: 1px solid #1e3a5f;
+            border-radius: 8px;
+            padding: 7px 12px;
+            color: #e2e8f0;
+            font-size: 13px;
+            min-height: 32px;
+        }
+        #searchBox:focus {
+            border: 1px solid #3b82f6;
+        }
+
+        #btnPrimary {
+            background: #2563eb;
+            border: none;
+            border-radius: 8px;
+            padding: 7px 16px;
+            font-weight: 700;
+            color: white;
+            min-height: 32px;
+        }
+        #btnPrimary:hover { background: #1d4ed8; }
+
+        #btnSecondary {
+            background: #111c33;
+            border: 1px solid #1e3a5f;
+            border-radius: 8px;
+            padding: 7px 14px;
+            font-weight: 600;
+            color: #94a3b8;
+            min-height: 32px;
+        }
+        #btnSecondary:hover {
+            border-color: #3b82f6;
+            color: #e2e8f0;
+        }
+
+        #btnWarning {
+            background: #111c33;
+            border: 1px solid #854d0e;
+            border-radius: 8px;
+            padding: 7px 14px;
+            font-weight: 600;
+            color: #fbbf24;
+            min-height: 32px;
+        }
+        #btnWarning:hover {
+            background: #1c1408;
+            border-color: #fbbf24;
+        }
+
+        #separator {
+            border: none;
+            border-top: 1px solid #1e293b;
+            margin: 0;
+        }
+
+        #productTable {
+            background: #0b1120;
+            alternate-background-color: #0f1a2e;
+            border: 1px solid #1e293b;
+            border-radius: 10px;
+            gridline-color: #1e293b;
+            selection-background-color: #1e3a5f;
+            selection-color: #f1f5f9;
+            outline: none;
+        }
+        #productTable QHeaderView::section {
+            background: #111c33;
+            color: #475569;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 8px 12px;
+            border: none;
+            border-bottom: 2px solid #1e293b;
+        }
+        #productTable::item {
+            padding: 6px 12px;
+            border: none;
+        }
+        #productTable::item:selected {
+            background: #1e3a5f;
+            color: #f1f5f9;
+        }
+        QScrollBar:vertical {
+            background: #0b1120;
+            width: 6px;
+            border-radius: 3px;
+        }
+        QScrollBar::handle:vertical {
+            background: #1e3a5f;
+            border-radius: 3px;
+        }
+
+        #footerLabel {
+            font-size: 11px;
+            color: #334155;
+        }
+        """
+
+    # ── EVENTOS ──────────────────────────────────────────────
     def showEvent(self, event):
-        """✅ FIX #4: Refresca stock cada vez que la ventana gana foco,
-        así refleja cambios hechos desde Entradas o Ventas."""
         super().showEvent(event)
         self.cargar_productos()
 
     def changeEvent(self, event):
-        """También refresca al volver a esta ventana desde otra."""
         super().changeEvent(event)
-        from PySide6.QtCore import QEvent
-
         if event.type() == QEvent.ActivationChange and self.isActiveWindow():
             self.cargar_productos()
 
+    # ── DATOS ────────────────────────────────────────────────
     def cargar_productos(self):
         texto = self.txt_buscar.text().strip()
         self._productos = listar_productos(texto=texto, incluir_inactivos=True)
@@ -90,73 +253,104 @@ class ProductsWindow(QWidget):
         was_sorting = self.table.isSortingEnabled()
         self.table.setSortingEnabled(False)
         self.table.blockSignals(True)
-
         self.table.setRowCount(len(self._productos))
+
+        activos = 0
+        stock_bajo = 0
 
         for row, p in enumerate(self._productos):
             stock = float(p.stock_actual or 0.0)
             minimo = float(p.stock_minimo or 0.0)
-            costo = float(p.costo_promedio or 0.0)
             es_bajo = minimo > 0 and stock <= minimo
+            es_activo = bool(p.activo)
 
-            self.table.setItem(row, 0, QTableWidgetItem(str(p.id)))
-            self.table.setItem(row, 1, QTableWidgetItem(p.codigo or ""))
-            self.table.setItem(row, 2, QTableWidgetItem(p.nombre or ""))
-            self.table.setItem(row, 3, QTableWidgetItem(p.unidad or ""))
-
-            item_stock = QTableWidgetItem(f"{stock:.2f}")
-            item_stock.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            if es_activo:
+                activos += 1
             if es_bajo:
-                font = QFont()
-                font.setBold(True)
-                item_stock.setFont(font)
-            self.table.setItem(row, 4, item_stock)
+                stock_bajo += 1
 
-            precio_fmt = (
-                "${:,.2f}".format(float(p.precio_venta or 0.0))
-                .replace(",", "X")
-                .replace(".", ",")
-                .replace("X", ".")
+            # Altura de fila
+            self.table.setRowHeight(row, 34)
+
+            # Columnas
+            def cell(text, align=Qt.AlignLeft | Qt.AlignVCenter):
+                it = QTableWidgetItem(str(text))
+                it.setTextAlignment(int(align))
+                return it
+
+            self.table.setItem(
+                row, 0, cell(str(p.id), Qt.AlignCenter | Qt.AlignVCenter)
             )
-            item_precio = QTableWidgetItem(precio_fmt)
-            item_precio.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.table.setItem(row, 5, item_precio)
+            self.table.setItem(row, 1, cell(p.codigo or ""))
+            self.table.setItem(row, 2, cell(p.nombre or ""))
 
-            # ✅ Columna costo promedio (útil para ver margen a simple vista)
-            costo_fmt = (
-                "${:,.2f}".format(costo)
-                .replace(",", "X")
-                .replace(".", ",")
-                .replace("X", ".")
+            # Unidad con badge kg
+            unidad_txt = (p.unidad or "und").strip()
+            it_unidad = cell(unidad_txt, Qt.AlignCenter | Qt.AlignVCenter)
+            if unidad_txt.lower() == "kg":
+                it_unidad.setForeground(QBrush(QColor("#38bdf8")))
+                font_u = QFont()
+                font_u.setBold(True)
+                it_unidad.setFont(font_u)
+            self.table.setItem(row, 3, it_unidad)
+
+            # Stock
+            stock_txt = f"{int(stock)}" if stock == int(stock) else f"{stock:.2f}"
+            it_stock = cell(stock_txt, Qt.AlignRight | Qt.AlignVCenter)
+            if es_bajo:
+                it_stock.setForeground(QBrush(QColor("#f87171")))
+                f2 = QFont()
+                f2.setBold(True)
+                it_stock.setFont(f2)
+            else:
+                it_stock.setForeground(QBrush(QColor("#4ade80")))
+            self.table.setItem(row, 4, it_stock)
+
+            # Estado
+            it_estado = cell(
+                "● Activo" if es_activo else "○ Inactivo",
+                Qt.AlignCenter | Qt.AlignVCenter,
             )
-            item_costo = QTableWidgetItem(costo_fmt)
-            item_costo.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.table.setItem(row, 6, item_costo)
+            it_estado.setForeground(
+                QBrush(QColor("#4ade80") if es_activo else QColor("#475569"))
+            )
+            self.table.setItem(row, 5, it_estado)
 
-            self.table.setItem(row, 7, QTableWidgetItem("Sí" if p.activo else "No"))
-
+            # Fila stock bajo → fondo rojo tenue
             if es_bajo:
                 for col in range(self.table.columnCount()):
-                    item = self.table.item(row, col)
-                    if item:
-                        item.setBackground(QBrush(QColor(120, 40, 40)))
-                        item.setForeground(QBrush(QColor(240, 240, 240)))
+                    it = self.table.item(row, col)
+                    if it:
+                        it.setBackground(QBrush(QColor(120, 30, 30, 80)))
+
+            # Fila inactivo → texto apagado
+            if not es_activo:
+                for col in range(self.table.columnCount()):
+                    it = self.table.item(row, col)
+                    if it and col != 5:
+                        it.setForeground(QBrush(QColor("#334155")))
 
         self.table.blockSignals(False)
-        self.table.resizeColumnsToContents()
         self.table.setSortingEnabled(was_sorting)
 
+        # Footer
+        parts = [f"{len(self._productos)} productos"]
+        if stock_bajo:
+            parts.append(f"⚠ {stock_bajo} con stock bajo")
+        self.lbl_count.setText("  ·  ".join(parts))
+
+    # ── SELECCIÓN ────────────────────────────────────────────
     def _get_selected_product(self):
         row = self.table.currentRow()
         if row < 0 or row >= len(self._productos):
             return None
         return self._productos[row]
 
+    # ── ACCIONES ─────────────────────────────────────────────
     def abrir_form_nuevo(self):
         from app.ui.product_form import ProductForm
 
-        dlg = ProductForm(self)
-        if dlg.exec():
+        if ProductForm(self).exec():
             self.cargar_productos()
 
     def abrir_form_editar(self):
@@ -168,8 +362,7 @@ class ProductsWindow(QWidget):
                 self, "Selecciona", "Selecciona un producto primero."
             )
             return
-        dlg = ProductForm(self, product=p)
-        if dlg.exec():
+        if ProductForm(self, product=p).exec():
             self.cargar_productos()
 
     def _dbl_click_editar(self, row, col):
@@ -182,20 +375,17 @@ class ProductsWindow(QWidget):
                 self, "Selecciona", "Selecciona un producto primero."
             )
             return
-
         r = QMessageBox.question(
             self,
             "Confirmar",
-            f"¿Cambiar estado del producto '{p.nombre}' (código {p.codigo})?\n\n"
+            f"¿Cambiar estado de '{p.nombre}'?\n"
             f"Estado actual: {'Activo' if p.activo else 'Inactivo'}",
         )
         if r != QMessageBox.Yes:
             return
-
         try:
             cambiar_estado_producto(p.id)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"No se pudo cambiar estado:\n{e}")
+            QMessageBox.critical(self, "Error", str(e))
             return
-
         self.cargar_productos()
