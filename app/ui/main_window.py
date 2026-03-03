@@ -40,13 +40,13 @@ class DashboardTile(QFrame):
 
         lbl_t = QLabel(title)
         lbl_t.setObjectName("tileTitle")
-        lbl_t.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # deja pasar el click
+        lbl_t.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         lay.addWidget(lbl_t)
 
         lbl_d = QLabel(desc)
         lbl_d.setObjectName("tileDesc")
         lbl_d.setWordWrap(True)
-        lbl_d.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # deja pasar el click
+        lbl_d.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         lay.addWidget(lbl_d)
 
         lay.addStretch(1)
@@ -82,23 +82,22 @@ class MainWindow(QMainWindow):
         header = QHBoxLayout()
         header.setSpacing(14)
 
-        # Logo card
+        # Logo card — clickeable directamente, sin botón
         logo_card = QFrame()
         logo_card.setObjectName("card")
         logo_lay = QVBoxLayout(logo_card)
         logo_lay.setContentsMargins(12, 12, 12, 12)
-        logo_lay.setSpacing(8)
+        logo_lay.setSpacing(0)
 
-        self.lbl_logo = QLabel("LOGO")
+        self.lbl_logo = QLabel("＋  LOGO")
         self.lbl_logo.setAlignment(Qt.AlignCenter)
-        self.lbl_logo.setFixedSize(150, 95)
+        self.lbl_logo.setFixedSize(150, 110)
         self.lbl_logo.setObjectName("logoBox")
+        self.lbl_logo.setCursor(QCursor(Qt.PointingHandCursor))
+        self.lbl_logo.setToolTip("Clic para cargar logo")
+        # Hacer el label clickeable
+        self.lbl_logo.mousePressEvent = lambda _: self.cargar_logo()
         logo_lay.addWidget(self.lbl_logo, alignment=Qt.AlignLeft)
-
-        btn_logo = QPushButton("Cargar logo")
-        btn_logo.setObjectName("btnSecondary")
-        btn_logo.clicked.connect(self.cargar_logo)
-        logo_lay.addWidget(btn_logo, alignment=Qt.AlignLeft)
 
         header.addWidget(logo_card)
 
@@ -142,9 +141,7 @@ class MainWindow(QMainWindow):
             1,
         )
         grid.addWidget(
-            self._make_tile("🧾 Entradas", "Compras y stock", self.abrir_entradas),
-            1,
-            0,
+            self._make_tile("🧾 Entradas", "Compras y stock", self.abrir_entradas), 1, 0
         )
         grid.addWidget(
             self._make_tile("🛒 Ventas", "Ventas y salida de stock", self.abrir_ventas),
@@ -168,22 +165,15 @@ class MainWindow(QMainWindow):
 
         # ----- FOOTER -----
         footer = QHBoxLayout()
-        footer.setSpacing(8)
-
         self.lbl_footer = QLabel(
             f"Versión: {APP_VERSION}   •   Base de datos local   •   Backups automáticos al cerrar"
         )
         self.lbl_footer.setObjectName("footer")
         footer.addWidget(self.lbl_footer, 1)
-
         main.addLayout(footer)
 
         self.setCentralWidget(root)
-
-        # ----- Estilos -----
         self._apply_styles()
-
-        # Cargar logo si existe
         self._load_logo_if_exists()
 
     # ---------------- UI helpers ----------------
@@ -194,48 +184,29 @@ class MainWindow(QMainWindow):
         return card
 
     def _apply_styles(self):
-        # 🔒 Blindaje: fuerza colores aunque Windows intente sobreescribir (alto contraste/tema)
         self.setStyleSheet(
             """
-            /* Fuerza color global para evitar letras negras en algunos PCs */
             QWidget {
                 color: #e2e8f0;
                 font-size: 14px;
             }
-            QLabel {
-                color: #e2e8f0;
-            }
+            QLabel { color: #e2e8f0; }
 
-            #root {
-                background: #0f172a; /* slate-900 */
-            }
+            #root { background: #0f172a; }
 
             #card, #tile {
                 background: #111c33;
                 border: 1px solid #223152;
                 border-radius: 12px;
             }
-
-            /* hover pro */
             #tile:hover {
                 border: 1px solid #3b82f6;
                 background: #101e3a;
             }
 
-            #title {
-                font-size: 22px;
-                font-weight: 800;
-            }
-
-            #subtitle {
-                color: #b6c2d2;
-                font-size: 13px;
-            }
-
-            #footer {
-                color: #94a3b8;
-                font-size: 12px;
-            }
+            #title    { font-size: 22px; font-weight: 800; }
+            #subtitle { color: #b6c2d2; font-size: 13px; }
+            #footer   { color: #94a3b8; font-size: 12px; }
 
             #logoBox {
                 border: 1px dashed #334155;
@@ -243,7 +214,13 @@ class MainWindow(QMainWindow):
                 background: #0b1224;
                 color: #94a3b8;
                 font-weight: 700;
+                font-size: 13px;
                 letter-spacing: 1px;
+            }
+            #logoBox:hover {
+                border: 1px dashed #3b82f6;
+                background: #0d1a33;
+                color: #93c5fd;
             }
 
             #btnPrimary {
@@ -256,26 +233,10 @@ class MainWindow(QMainWindow):
             }
             #btnPrimary:hover { background: #1d4ed8; }
 
-            #btnSecondary {
-                background: #0b1224;
-                border: 1px solid #334155;
-                padding: 8px 12px;
-                border-radius: 10px;
-                font-weight: 700;
-                color: #e2e8f0;
-            }
-            #btnSecondary:hover { background: #0a1020; }
-
             #tileTitle { font-size: 17px; font-weight: 800; }
             #tileDesc  { color: #b6c2d2; font-size: 13px; }
-
-            /* Indicador en vez de botón */
-            #tileHint {
-                color: #93c5fd;
-                font-weight: 700;
-                font-size: 12px;
-            }
-            """
+            #tileHint  { color: #93c5fd; font-weight: 700; font-size: 12px; }
+        """
         )
 
     # ---------------- Logo handling ----------------
@@ -295,7 +256,7 @@ class MainWindow(QMainWindow):
                 self.lbl_logo.setText("")
             else:
                 self.lbl_logo.setPixmap(QPixmap())
-                self.lbl_logo.setText("LOGO")
+                self.lbl_logo.setText("＋  LOGO")
 
     def cargar_logo(self):
         try:
@@ -307,18 +268,13 @@ class MainWindow(QMainWindow):
             )
             if not path:
                 return
-
             src = Path(path)
             if not src.exists():
                 return
-
             dest = self._logo_path()
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(src.read_bytes())
-
             self._load_logo_if_exists()
-            QMessageBox.information(self, "Logo", "Logo actualizado correctamente.")
-
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudo cargar el logo:\n{e}")
 
