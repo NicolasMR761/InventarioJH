@@ -370,6 +370,18 @@ class KardexWindow(QWidget):
         self._set_card(self._card_saldo, f"{_fmt_qty(saldo_final)} {unidad}")
 
     # ── CARGA ─────────────────────────────────────────
+    def keyPressEvent(self, event):
+        from PySide6.QtCore import Qt
+
+        key = event.key()
+        mod = event.modifiers()
+        if key == Qt.Key_F5:
+            self.cargar()
+        elif key == Qt.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
+
     def cargar(self):
         if self.cbo_producto.count() == 0:
             self.table.setRowCount(0)

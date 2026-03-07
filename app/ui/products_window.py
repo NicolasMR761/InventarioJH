@@ -236,6 +236,20 @@ class ProductsWindow(QWidget):
         """
 
     # ── EVENTOS ──────────────────────────────────────────────
+    def keyPressEvent(self, event):
+        from PySide6.QtCore import Qt
+
+        key = event.key()
+        mod = event.modifiers()
+        if key == Qt.Key_F5:
+            self.cargar_productos()
+        elif key == Qt.Key_Escape:
+            self.close()
+        elif key == Qt.Key_N and mod == Qt.ControlModifier:
+            self.abrir_form_nuevo()
+        else:
+            super().keyPressEvent(event)
+
     def showEvent(self, event):
         super().showEvent(event)
         self.cargar_productos()

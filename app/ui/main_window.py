@@ -539,6 +539,18 @@ class MainWindow(QMainWindow):
                 self, "Error", f"No se pudo crear el backup:\n{str(e)}"
             )
 
+    def keyPressEvent(self, event):
+        from PySide6.QtCore import Qt
+
+        key = event.key()
+        mod = event.modifiers()
+        if key == Qt.Key_F5:
+            self._refresh_metrics()
+        elif key == Qt.Key_B and mod == Qt.ControlModifier:
+            self.hacer_backup()
+        else:
+            super().keyPressEvent(event)
+
     def closeEvent(self, event):
         try:
             ruta_db = get_app_data_dir() / "inventario.db"

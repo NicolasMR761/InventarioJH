@@ -448,6 +448,22 @@ class CashWindow(QWidget):
         self.btn_next.setEnabled(self.offset + self.page_size < self.total_count)
 
     # ── CARGA ─────────────────────────────────────────
+    def keyPressEvent(self, event):
+        from PySide6.QtCore import Qt
+
+        key = event.key()
+        mod = event.modifiers()
+        if key == Qt.Key_F5:
+            self.cargar(reset_offset=True)
+        elif key == Qt.Key_Escape:
+            self.close()
+        elif key == Qt.Key_I and mod == Qt.ControlModifier:
+            self.abrir_ingreso()
+        elif key == Qt.Key_E and mod == Qt.ControlModifier:
+            self.abrir_egreso()
+        else:
+            super().keyPressEvent(event)
+
     def cargar(self, reset_offset: bool = False):
         try:
             if reset_offset:

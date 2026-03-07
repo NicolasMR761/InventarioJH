@@ -337,6 +337,20 @@ class EntriesWindow(QWidget):
         self.lbl_pago_hint.style().unpolish(self.lbl_pago_hint)
         self.lbl_pago_hint.style().polish(self.lbl_pago_hint)
 
+    def keyPressEvent(self, event):
+        from PySide6.QtCore import Qt
+
+        key = event.key()
+        mod = event.modifiers()
+        if key == Qt.Key_F5:
+            self.cargar_data()
+        elif key == Qt.Key_Escape:
+            self.close()
+        elif key == Qt.Key_S and mod == Qt.ControlModifier:
+            self.guardar()
+        else:
+            super().keyPressEvent(event)
+
     def cargar_data(self):
         self._proveedores = [
             s for s in listar_proveedores("", incluir_inactivos=True) if s.activo

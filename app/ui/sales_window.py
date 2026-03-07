@@ -620,6 +620,37 @@ class SalesWindow(QWidget):
         self.btn_next.setEnabled(self._offset + self._page_size < self._total_ventas)
 
     # ── CARGA DE DATOS ────────────────────────────────────
+    def keyPressEvent(self, event):
+        from PySide6.QtCore import Qt
+
+        key = event.key()
+        mod = event.modifiers()
+        if key in (Qt.Key_Return, Qt.Key_Enter) and mod == Qt.NoModifier:
+            # Solo agregar si el foco está en los campos del formulario
+            focus = self.focusWidget()
+            form_widgets = (
+                self.cbo_producto,
+                self.sp_cant,
+                self.sp_precio,
+                self.txt_cliente,
+                self.txt_factura,
+            )
+            if focus in form_widgets:
+                self.agregar_item()
+        elif key == Qt.Key_S and mod == Qt.ControlModifier:
+            self.guardar_venta()
+        elif key == Qt.Key_F5:
+            self.refrescar_todo()
+        elif key == Qt.Key_Escape:
+            # Limpiar formulario actual
+            self.items.clear()
+            self.tbl.setRowCount(0)
+            self.txt_cliente.clear()
+            self.txt_factura.clear()
+            self.actualizar_total()
+        else:
+            super().keyPressEvent(event)
+
     def refrescar_todo(self):
         self.cargar_productos()
         self.cargar_clientes()
@@ -730,6 +761,25 @@ class SalesWindow(QWidget):
         if precio < 0:
             QMessageBox.warning(self, "Ventas", "El precio no puede ser negativo.")
             return
+
+        # ── Validar stock disponible ──────────────────
+        idx = self.cbo_producto.currentIndex()
+        if 0 <= idx < len(self._productos_cache):
+            stock_disp = self._productos_cache[idx]["stock_actual"]
+            # Restar lo que ya está en el formulario para este mismo producto
+            ya_en_form = sum(
+                i["cantidad"] for i in self.items if i["product_id"] == product_id
+            )
+            stock_real = stock_disp - ya_en_form
+            if cantidad > stock_real:
+                QMessageBox.warning(
+                    self,
+                    "Stock insuficiente",
+                    f"'{nombre.split("  (")[0]}' solo tiene {int(stock_real) if stock_real == int(stock_real) else stock_real:g} unidad(es) disponible(s).\n"
+                    f"Ya tienes {ya_en_form} en este pedido.",
+                )
+                return
+
         subtotal = cantidad * precio
         self.items.append(
             {"product_id": product_id, "cantidad": cantidad, "precio_venta": precio}
