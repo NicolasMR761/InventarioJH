@@ -150,3 +150,14 @@ class SaleDetail(Base):
 
     sale = relationship("Sale", back_populates="details")
     product = relationship("Product")
+
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id = Column(Integer, primary_key=True)
+    password_hash = Column(String(256), nullable=False)
+    security_question = Column(String(300), nullable=False)
+    security_answer_hash = Column(String(256), nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

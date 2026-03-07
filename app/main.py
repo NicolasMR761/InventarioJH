@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QApplication
-from app.ui.main_window import MainWindow
 from app.db.database import init_db
+from app.ui.login_window import LoginWindow
 
 import sys
 from pathlib import Path
@@ -12,21 +12,30 @@ def main():
 
     app = QApplication(sys.argv)
 
-    # Subimos un nivel porque main.py está dentro de app/
     base_dir = Path(__file__).resolve().parent.parent
     icon_path = base_dir / "assets" / "icon.ico"
 
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
 
-    w = MainWindow()
+    # ── Mostrar login ──────────────────────────────────────
+    login = LoginWindow()
 
     if icon_path.exists():
-        ico = QIcon(str(icon_path))
-        app.setWindowIcon(ico)
-        w.setWindowIcon(ico)
+        login.setWindowIcon(QIcon(str(icon_path)))
 
-    w.show()
+    def abrir_dashboard():
+        from app.ui.main_window import MainWindow
+
+        w = MainWindow()
+        if icon_path.exists():
+            w.setWindowIcon(QIcon(str(icon_path)))
+        w.show()
+        login.close()
+        app._main_window = w  # evitar garbage collection
+
+    login.login_exitoso.connect(abrir_dashboard)
+    login.show()
 
     sys.exit(app.exec())
 
