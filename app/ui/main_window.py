@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.db.database import init_db, get_app_data_dir
+from PySide6.QtGui import QPainter, QPen, QLinearGradient, QColor as QColorG
+from PySide6.QtCore import QRect, QPoint
 from app.utils.backup import crear_backup
 
 APP_VERSION = "v1.2.0"
@@ -120,6 +122,96 @@ class MetricCard(QFrame):
     def set_value(self, value: str, sub: str = ""):
         self.lbl_value.setText(value)
         self.lbl_sub.setText(sub)
+
+
+# ─────────────────────────────────────────────
+#  Gráfica de barras — ventas últimos 7 días
+# ─────────────────────────────────────────────
+class SalesChart(QWidget):
+    """Gráfica de barras nativa (sin dependencias externas)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumHeight(160)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._data: list[tuple[str, float]] = []  # [(label, valor), ...]
+        self._accent = "#3b82f6"
+
+    def set_data(self, data: list[tuple[str, float]], accent: str = "#3b82f6"):
+        self._data = data
+        self._accent = accent
+        self.update()
+
+    def paintEvent(self, event):
+        if not self._data:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        W, H = self.width(), self.height()
+        PAD_L, PAD_R, PAD_T, PAD_B = 14, 14, 14, 36
+
+        n = len(self._data)
+        max_val = max(v for _, v in self._data) or 1
+        available_w = W - PAD_L - PAD_R
+        bar_w = max(8, int(available_w / n * 0.55))
+        gap = (available_w - bar_w * n) // (n + 1)
+        chart_h = H - PAD_T - PAD_B
+
+        # Línea guía superior
+        pen = QPen(QColorG("#1e293b"))
+        pen.setWidth(1)
+        painter.setPen(pen)
+        painter.drawLine(PAD_L, PAD_T, W - PAD_R, PAD_T)
+
+        for i, (label, valor) in enumerate(self._data):
+            x = PAD_L + gap + i * (bar_w + gap)
+            bar_h = max(4, int(chart_h * valor / max_val))
+            y = PAD_T + chart_h - bar_h
+
+            # Gradiente de la barra
+            grad = QLinearGradient(x, y, x, y + bar_h)
+            is_today = i == n - 1
+            if is_today:
+                grad.setColorAt(0, QColorG("#60a5fa"))
+                grad.setColorAt(1, QColorG("#2563eb"))
+            else:
+                grad.setColorAt(0, QColorG("#1e3a5f"))
+                grad.setColorAt(1, QColorG("#0f1e36"))
+
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(grad)
+            rect = QRect(x, y, bar_w, bar_h)
+            painter.drawRoundedRect(rect, 3, 3)
+
+            # Valor encima de la barra (solo si tiene valor)
+            if valor > 0:
+                painter.setPen(QPen(QColorG("#60a5fa" if is_today else "#334155")))
+                val_txt = _fmt_cop(valor) if valor >= 1000 else str(int(valor))
+                font = painter.font()
+                font.setPointSize(7)
+                font.setBold(is_today)
+                painter.setFont(font)
+                painter.drawText(
+                    QRect(x - 10, y - 16, bar_w + 20, 14),
+                    Qt.AlignHCenter | Qt.AlignBottom,
+                    val_txt,
+                )
+
+            # Label día debajo
+            painter.setPen(QPen(QColorG("#4ade80" if is_today else "#334155")))
+            font2 = painter.font()
+            font2.setPointSize(8)
+            font2.setBold(is_today)
+            painter.setFont(font2)
+            painter.drawText(
+                QRect(x - 6, H - PAD_B + 4, bar_w + 12, 20),
+                Qt.AlignHCenter,
+                label,
+            )
+
+        painter.end()
 
 
 # ─────────────────────────────────────────────
@@ -254,6 +346,25 @@ class MainWindow(QMainWindow):
         sep1.setObjectName("sep")
         main.addWidget(sep1)
 
+        # ── GRÁFICA 7 DÍAS ─────────────────────────────
+        lbl_chart = QLabel("📈  Ventas — últimos 7 días")
+        lbl_chart.setObjectName("sectionTitle")
+        main.addWidget(lbl_chart)
+
+        chart_card = QFrame()
+        chart_card.setObjectName("chartCard")
+        chart_lay = QVBoxLayout(chart_card)
+        chart_lay.setContentsMargins(12, 10, 12, 6)
+        self.sales_chart = SalesChart()
+        chart_lay.addWidget(self.sales_chart)
+        main.addWidget(chart_card)
+
+        # ── SEPARADOR ──────────────────────────────────
+        sep1b = QFrame()
+        sep1b.setFrameShape(QFrame.HLine)
+        sep1b.setObjectName("sep")
+        main.addWidget(sep1b)
+
         # ── GRID MÓDULOS ───────────────────────────────
         lbl_mod = QLabel("🗂  Módulos")
         lbl_mod.setObjectName("sectionTitle")
@@ -324,6 +435,11 @@ class MainWindow(QMainWindow):
         except Exception:
             self.card_stock_bajo.set_value("—", "Error")
             self.card_productos.set_value("—", "Error")
+
+        try:
+            self._load_chart()
+        except Exception:
+            pass
 
         now = datetime.now().strftime("%H:%M")
         self.lbl_last_refresh.setText(f"Actualizado: {now}")
@@ -412,6 +528,37 @@ class MainWindow(QMainWindow):
             str(len(todos)),
             f"{inactivos_count} inactivo(s)" if inactivos_count else "Todos activos ✓",
         )
+
+    def _load_chart(self):
+        from app.db.database import SessionLocal
+        from app.db.models import Sale
+        from datetime import timedelta, time
+
+        hoy = date.today()
+        data = []
+        dias_es = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+        for i in range(6, -1, -1):
+            dia = hoy - timedelta(days=i)
+            start = datetime.combine(dia, time.min)
+            end = datetime.combine(dia, time.max)
+            with SessionLocal() as db:
+                ventas = (
+                    db.query(Sale)
+                    .filter(
+                        Sale.fecha >= start,
+                        Sale.fecha <= end,
+                        Sale.anulada.is_(False),
+                    )
+                    .all()
+                )
+            total = sum(
+                float(v.total or 0) for v in ventas if v.estado_pago == "PAGADO"
+            )
+            label = "Hoy" if i == 0 else dias_es[dia.weekday()]
+            data.append((label, total))
+
+        self.sales_chart.set_data(data)
 
     # ── HELPERS ──────────────────────────────────────────
     def _update_datetime(self):
@@ -664,6 +811,14 @@ class MainWindow(QMainWindow):
             font-size: 12px; min-width: 100px;
         }
         #btnSecondary:hover { border-color: #3b82f6; color: #e2e8f0; }
+
+        /* ── Chart ── */
+        #chartCard {
+            background: #0d1829;
+            border: 1px solid #1a2a45;
+            border-radius: 12px;
+            min-height: 180px;
+        }
 
         /* ── Footer ── */
         #footer { font-size: 10px; color: #1e293b; }
