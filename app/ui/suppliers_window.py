@@ -20,6 +20,13 @@ from app.db.suppliers_repo import listar_proveedores, cambiar_estado_proveedor
 class SuppliersWindow(QWidget):
     def __init__(self):
         super().__init__()
+        try:
+            from app.main import get_icon
+
+            if get_icon():
+                self.setWindowIcon(get_icon())
+        except Exception:
+            pass
         self.setWindowTitle("Proveedores")
         self.resize(960, 560)
         self.setStyleSheet(self._styles())

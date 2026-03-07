@@ -25,6 +25,13 @@ class SettingsWindow(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        try:
+            from app.main import get_icon
+
+            if get_icon():
+                self.setWindowIcon(get_icon())
+        except Exception:
+            pass
         self.setWindowTitle("⚙️  Configuración")
         self.resize(520, 680)
         self.setMinimumSize(460, 580)

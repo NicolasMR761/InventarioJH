@@ -54,6 +54,13 @@ class _FixedTable(QTableWidget):
 class CashWindow(QWidget):
     def __init__(self):
         super().__init__()
+        try:
+            from app.main import get_icon
+
+            if get_icon():
+                self.setWindowIcon(get_icon())
+        except Exception:
+            pass
         self.setWindowTitle("Caja")
         self.resize(1050, 700)
         self.setStyleSheet(self._styles())

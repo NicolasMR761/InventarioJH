@@ -6,8 +6,21 @@ import sys
 from pathlib import Path
 from PySide6.QtGui import QIcon
 
+# ── Ícono global accesible desde cualquier ventana ────────────
+_ICON: QIcon | None = None
+
+
+def get_icon() -> QIcon | None:
+    return _ICON
+
+
+def _set_icon(window) -> None:
+    if _ICON:
+        window.setWindowIcon(_ICON)
+
 
 def main():
+    global _ICON
     init_db()
 
     app = QApplication(sys.argv)
@@ -16,23 +29,20 @@ def main():
     icon_path = base_dir / "assets" / "icon.ico"
 
     if icon_path.exists():
-        app.setWindowIcon(QIcon(str(icon_path)))
+        _ICON = QIcon(str(icon_path))
+        app.setWindowIcon(_ICON)
 
-    # ── Mostrar login ──────────────────────────────────────
     login = LoginWindow()
-
-    if icon_path.exists():
-        login.setWindowIcon(QIcon(str(icon_path)))
+    _set_icon(login)
 
     def abrir_dashboard():
         from app.ui.main_window import MainWindow
 
         w = MainWindow()
-        if icon_path.exists():
-            w.setWindowIcon(QIcon(str(icon_path)))
+        _set_icon(w)
         w.show()
         login.close()
-        app._main_window = w  # evitar garbage collection
+        app._main_window = w
 
     login.login_exitoso.connect(abrir_dashboard)
     login.show()

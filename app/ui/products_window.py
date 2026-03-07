@@ -20,6 +20,13 @@ from app.db.products_repo import listar_productos, cambiar_estado_producto
 class ProductsWindow(QWidget):
     def __init__(self):
         super().__init__()
+        try:
+            from app.main import get_icon
+
+            if get_icon():
+                self.setWindowIcon(get_icon())
+        except Exception:
+            pass
         self.setWindowTitle("Productos")
         self.resize(960, 580)
         self.setStyleSheet(self._styles())

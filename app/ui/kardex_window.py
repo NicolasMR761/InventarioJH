@@ -67,6 +67,13 @@ class _FixedTable(QTableWidget):
 class KardexWindow(QWidget):
     def __init__(self):
         super().__init__()
+        try:
+            from app.main import get_icon
+
+            if get_icon():
+                self.setWindowIcon(get_icon())
+        except Exception:
+            pass
         self.setWindowTitle("Kardex por Producto")
         self.resize(1120, 720)
         self.setStyleSheet(self._styles())

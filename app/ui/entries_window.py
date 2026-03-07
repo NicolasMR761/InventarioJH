@@ -24,6 +24,13 @@ from app.db.suppliers_repo import listar_proveedores
 class EntriesWindow(QWidget):
     def __init__(self):
         super().__init__()
+        try:
+            from app.main import get_icon
+
+            if get_icon():
+                self.setWindowIcon(get_icon())
+        except Exception:
+            pass
         self.setWindowTitle("Entradas (Compras)")
         self.resize(980, 640)
         self.setStyleSheet(self._styles())

@@ -92,6 +92,13 @@ class _FixedTable(QTableWidget):
 class SalesWindow(QWidget):
     def __init__(self):
         super().__init__()
+        try:
+            from app.main import get_icon
+
+            if get_icon():
+                self.setWindowIcon(get_icon())
+        except Exception:
+            pass
         self.setWindowTitle("Ventas")
         self.resize(1020, 760)
         self.setStyleSheet(self._styles())
