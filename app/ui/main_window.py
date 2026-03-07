@@ -269,9 +269,7 @@ class MainWindow(QMainWindow):
         self.lbl_logo.setAlignment(Qt.AlignCenter)
         self.lbl_logo.setFixedSize(130, 90)
         self.lbl_logo.setObjectName("logoBox")
-        self.lbl_logo.setCursor(QCursor(Qt.PointingHandCursor))
-        self.lbl_logo.setToolTip("Clic para cargar logo")
-        self.lbl_logo.mousePressEvent = lambda _: self.cargar_logo()
+
         logo_lay.addWidget(self.lbl_logo, alignment=Qt.AlignLeft)
         header.addWidget(logo_card)
 
@@ -299,10 +297,14 @@ class MainWindow(QMainWindow):
         btn_backup = QPushButton("💾  Backup")
         btn_backup.setObjectName("btnPrimary")
         btn_backup.clicked.connect(self.hacer_backup)
+        btn_config = QPushButton("⚙️  Configuración")
+        btn_config.setObjectName("btnSecondary")
+        btn_config.clicked.connect(self.abrir_configuracion)
         hdr_btns = QVBoxLayout()
         hdr_btns.setSpacing(6)
         hdr_btns.addWidget(btn_refresh)
         hdr_btns.addWidget(btn_backup)
+        hdr_btns.addWidget(btn_config)
         header.addLayout(hdr_btns)
         main.addLayout(header)
 
@@ -602,36 +604,26 @@ class MainWindow(QMainWindow):
         if path.exists():
             pix = QPixmap(str(path))
             if not pix.isNull():
+                from PySide6.QtGui import QPainter, QPainterPath
+
                 scaled = pix.scaled(
                     self.lbl_logo.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
                 )
-                self.lbl_logo.setPixmap(scaled)
+                rounded = QPixmap(scaled.size())
+                rounded.fill(Qt.transparent)
+                p = QPainter(rounded)
+                p.setRenderHint(QPainter.Antialiasing)
+                pp = QPainterPath()
+                pp.addRoundedRect(0, 0, scaled.width(), scaled.height(), 14, 14)
+                p.setClipPath(pp)
+                p.drawPixmap(0, 0, scaled)
+                p.end()
+                self.lbl_logo.setPixmap(rounded)
                 self.lbl_logo.setText("")
             else:
                 self.lbl_logo.setPixmap(QPixmap())
-                self.lbl_logo.setText("＋  LOGO")
+                self.lbl_logo.setText("")
 
-    def cargar_logo(self):
-        try:
-            path, _ = QFileDialog.getOpenFileName(
-                self,
-                "Seleccionar logo",
-                "",
-                "Imágenes (*.png *.jpg *.jpeg *.bmp *.webp)",
-            )
-            if not path:
-                return
-            src = Path(path)
-            if not src.exists():
-                return
-            dest = self._logo_path()
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(src.read_bytes())
-            self._load_logo_if_exists()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"No se pudo cargar el logo:\n{e}")
-
-    # ── NAVEGACIÓN ───────────────────────────────────────
     def abrir_productos(self):
         from app.ui.products_window import ProductsWindow
 
@@ -667,6 +659,12 @@ class MainWindow(QMainWindow):
 
         self.win_kardex = KardexWindow()
         self.win_kardex.show()
+
+    def abrir_configuracion(self):
+        from app.ui.settings_window import SettingsWindow
+
+        self.win_config = SettingsWindow()
+        self.win_config.show()
 
     def _prox(self):
         QMessageBox.information(
@@ -740,14 +738,14 @@ class MainWindow(QMainWindow):
 
         /* ── Logo ── */
         #card {
-            background: #0f1a2e;
-            border: 1px solid #1e293b;
+            background: transparent;
+            border: none;
             border-radius: 10px;
         }
         #logoBox {
-            background: #111c33;
-            border: 2px dashed #1e3a5f;
-            border-radius: 8px;
+            background: transparent;
+            border: none;
+            border-radius: 12px;
             color: #334155;
             font-size: 12px;
         }

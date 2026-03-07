@@ -84,7 +84,7 @@ class LoginWindow(QWidget):
                 from PySide6.QtGui import QPainter, QBrush, QPainterPath
 
                 scaled = pix.scaled(
-                    180, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    1240, 190, Qt.KeepAspectRatio, Qt.SmoothTransformation
                 )
                 rounded = QPixmap(scaled.size())
                 rounded.fill(Qt.transparent)

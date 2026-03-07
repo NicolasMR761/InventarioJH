@@ -177,15 +177,31 @@ def _build_pdf(path: str, sale) -> None:
         y -= 6 * mm
 
     # ── Encabezado empresa ────────────────────────────────────────────────────
+    from app.utils.config_manager import cargar_config
+
+    cfg = cargar_config()
+    empresa_nombre = cfg.get("empresa_nombre") or "Inventario JH"
+    empresa_tel = cfg.get("empresa_telefono", "")
+    empresa_dir = cfg.get("empresa_direccion", "")
+
     c.setFillColor(colors.HexColor("#f1f5f9"))
     c.setFont("Helvetica-Bold", 11)
-    c.drawCentredString(W / 2, y, "INVENTARIO JH")
+    c.drawCentredString(W / 2, y, empresa_nombre.upper())
     y -= 5 * mm
 
-    c.setFillColor(colors.HexColor("#475569"))
-    c.setFont("Helvetica", 7)
-    c.drawCentredString(W / 2, y, "Sistema de Inventario")
-    y -= 7 * mm
+    if empresa_tel:
+        c.setFillColor(colors.HexColor("#475569"))
+        c.setFont("Helvetica", 7)
+        c.drawCentredString(W / 2, y, f"Tel: {empresa_tel}")
+        y -= 4 * mm
+
+    if empresa_dir:
+        c.setFillColor(colors.HexColor("#475569"))
+        c.setFont("Helvetica", 6.5)
+        c.drawCentredString(W / 2, y, empresa_dir[:40])
+        y -= 4 * mm
+
+    y -= 3 * mm
 
     # ── Línea divisora ────────────────────────────────────────────────────────
     def hline(ypos, color="#1e3a5f", dash=None):
@@ -301,6 +317,6 @@ def _build_pdf(path: str, sale) -> None:
     y -= 4 * mm
     c.setFillColor(colors.HexColor("#0f172a"))
     c.setFont("Helvetica", 5.5)
-    c.drawCentredString(W / 2, y, "Generado por Inventario JH")
+    c.drawCentredString(W / 2, y, f"Generado por {empresa_nombre}")
 
     c.save()
