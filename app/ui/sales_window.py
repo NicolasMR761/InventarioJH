@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QComboBox,
     QSpinBox,
-    QDoubleSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QMessageBox,
@@ -37,6 +36,46 @@ from app.db.sales_repo import (
 from app.utils.formatters import fmt_fecha
 
 
+class CopSpinBox(QSpinBox):
+    """
+    SpinBox para precios en COP:
+    - Muestra separador de miles con punto  (ej: $6.000)
+    - Sube/baja de 50 en 50 con las flechas
+    - Acepta entrada con o sin puntos
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimum(0)
+        self.setMaximum(99_999_999)
+        self.setSingleStep(50)
+        self.setPrefix("$")
+
+    def textFromValue(self, value: int) -> str:
+        s = ""
+        digits = str(abs(value))
+        for i, ch in enumerate(reversed(digits)):
+            if i > 0 and i % 3 == 0:
+                s = "." + s
+            s = ch + s
+        return s
+
+    def valueFromText(self, text: str) -> int:
+        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
+        try:
+            return int(clean)
+        except ValueError:
+            return 0
+
+    def validate(self, text: str, pos: int):
+        from PySide6.QtGui import QValidator
+
+        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
+        if clean == "" or clean.isdigit():
+            return (QValidator.Acceptable, text, pos)
+        return (QValidator.Invalid, text, pos)
+
+
 class _FixedTable(QTableWidget):
     """
     Tabla con altura fija y scroll interno propio.
@@ -46,7 +85,6 @@ class _FixedTable(QTableWidget):
     """
 
     def wheelEvent(self, event: QWheelEvent):
-        # Siempre consume el evento: el scroll queda en la tabla
         super().wheelEvent(event)
         event.accept()
 
@@ -67,12 +105,11 @@ class SalesWindow(QWidget):
         self._total_ventas = 0
         self._ventas_cache: list = []
 
-        # ── Layout raíz: solo contiene el QScrollArea ──────
+        # ── Layout raíz ────────────────────────────────────
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # QScrollArea para la página completa (scroll vertical de la ventana)
         self._page_scroll = QScrollArea()
         self._page_scroll.setWidgetResizable(True)
         self._page_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -80,7 +117,6 @@ class SalesWindow(QWidget):
         self._page_scroll.setFrameShape(QFrame.NoFrame)
         outer.addWidget(self._page_scroll)
 
-        # Widget contenedor del contenido real
         content = QWidget()
         self._page_scroll.setWidget(content)
 
@@ -119,60 +155,56 @@ class SalesWindow(QWidget):
         row1.addWidget(lbl_c)
         self.sp_cant = QSpinBox()
         self.sp_cant.setObjectName("spinBox")
-        self.sp_cant.setRange(1, 9999999)
+        self.sp_cant.setMinimum(1)
+        self.sp_cant.setMaximum(999999)
         self.sp_cant.setValue(1)
-        self.sp_cant.setCursor(Qt.ArrowCursor)
-        row1.addWidget(self.sp_cant, 1)
+        self.sp_cant.setFixedWidth(80)
+        row1.addWidget(self.sp_cant)
 
         lbl_pr = QLabel("Precio:")
         lbl_pr.setObjectName("fieldLabel")
         row1.addWidget(lbl_pr)
-        self.sp_precio = QDoubleSpinBox()
+        self.sp_precio = CopSpinBox()
         self.sp_precio.setObjectName("spinBox")
-        self.sp_precio.setDecimals(2)
-        self.sp_precio.setRange(0, 999999999)
-        self.sp_precio.setValue(0)
-        self.sp_precio.setSingleStep(50)
-        self.sp_precio.setCursor(Qt.ArrowCursor)
-        row1.addWidget(self.sp_precio, 1)
+        self.sp_precio.setFixedWidth(130)
+        row1.addWidget(self.sp_precio)
 
         self.btn_agregar = QPushButton("＋  Agregar")
         self.btn_agregar.setObjectName("btnPrimary")
         row1.addWidget(self.btn_agregar)
         root.addLayout(row1)
 
-        # ── FILA 2: Cliente + Factura + Pago + Método ────
+        # ── FILA 2: Factura + Cliente + Estado + Método ──
         row2 = QHBoxLayout()
         row2.setSpacing(8)
+
+        lbl_f = QLabel("Factura:")
+        lbl_f.setObjectName("fieldLabel")
+        row2.addWidget(lbl_f)
+        self.txt_factura = QLineEdit()
+        self.txt_factura.setObjectName("inputField")
+        self.txt_factura.setPlaceholderText("Nro. factura…")
+        self.txt_factura.setFixedWidth(120)
+        row2.addWidget(self.txt_factura)
 
         lbl_cl = QLabel("Cliente:")
         lbl_cl.setObjectName("fieldLabel")
         row2.addWidget(lbl_cl)
         self.txt_cliente = QLineEdit()
         self.txt_cliente.setObjectName("inputField")
-        self.txt_cliente.setPlaceholderText("Nombre del cliente")
-        self.txt_cliente.setMinimumWidth(160)
+        self.txt_cliente.setPlaceholderText("Nombre cliente…")
         row2.addWidget(self.txt_cliente, 2)
 
         self.btn_nuevo_cliente = QPushButton("＋ Cliente")
         self.btn_nuevo_cliente.setObjectName("btnSecondary")
         row2.addWidget(self.btn_nuevo_cliente)
 
-        lbl_fac = QLabel("N° Factura:")
-        lbl_fac.setObjectName("fieldLabel")
-        row2.addWidget(lbl_fac)
-        self.txt_factura = QLineEdit()
-        self.txt_factura.setObjectName("inputField")
-        self.txt_factura.setPlaceholderText("Ej: 001, FAC-123…")
-        self.txt_factura.setMaximumWidth(120)
-        row2.addWidget(self.txt_factura)
-
-        lbl_pg = QLabel("Pago:")
-        lbl_pg.setObjectName("fieldLabel")
-        row2.addWidget(lbl_pg)
+        lbl_ep = QLabel("Estado:")
+        lbl_ep.setObjectName("fieldLabel")
+        row2.addWidget(lbl_ep)
         self.cbo_estado_pago = QComboBox()
         self.cbo_estado_pago.setObjectName("combo")
-        self.cbo_estado_pago.addItems(["PAGADO", "PENDIENTE (Fiado)"])
+        self.cbo_estado_pago.addItems(["✅ PAGADO", "⏳ PENDIENTE (fiado)"])
         self.cbo_estado_pago.setCursor(Qt.ArrowCursor)
         row2.addWidget(self.cbo_estado_pago)
 
@@ -189,7 +221,6 @@ class SalesWindow(QWidget):
         root.addLayout(row2)
 
         # ── TABLA ITEMS VENTA ACTUAL ──────────────────────
-        # QTableWidget normal: scroll propaga a la página (sin focus local)
         self.tbl = QTableWidget(0, 5)
         self.tbl.setObjectName("innerTable")
         self.tbl.setHorizontalHeaderLabels(
@@ -281,10 +312,11 @@ class SalesWindow(QWidget):
         hdr_hist.addWidget(self.btn_anular)
         root.addLayout(hdr_hist)
 
-        self.tbl_hist = _FixedTable(0, 6)
+        # Tabla historial — 7 columnas (agrega col PDF)
+        self.tbl_hist = _FixedTable(0, 7)
         self.tbl_hist.setObjectName("innerTable")
         self.tbl_hist.setHorizontalHeaderLabels(
-            ["ID", "Factura", "Fecha", "Cliente", "Total", ""]
+            ["ID", "Factura", "Fecha", "Cliente", "Total", "Acciones", ""]
         )
         self.tbl_hist.verticalHeader().setVisible(False)
         self.tbl_hist.setShowGrid(True)
@@ -300,12 +332,13 @@ class SalesWindow(QWidget):
         hh3.setSectionResizeMode(3, QHeaderView.Stretch)
         hh3.setSectionResizeMode(4, QHeaderView.Fixed)
         hh3.setSectionResizeMode(5, QHeaderView.Fixed)
-        self.tbl_hist.setColumnWidth(0, 50)
+        hh3.setSectionResizeMode(6, QHeaderView.Fixed)
+        self.tbl_hist.setColumnWidth(0, 45)
         self.tbl_hist.setColumnWidth(1, 100)
-        self.tbl_hist.setColumnWidth(2, 140)
-        self.tbl_hist.setColumnWidth(4, 130)
-        self.tbl_hist.setColumnWidth(5, 110)
-        # Altura fija generosa: muestra ~15 filas con scroll propio
+        self.tbl_hist.setColumnWidth(2, 135)
+        self.tbl_hist.setColumnWidth(4, 120)
+        self.tbl_hist.setColumnWidth(5, 80)
+        self.tbl_hist.setColumnWidth(6, 80)
         self.tbl_hist.setFixedHeight(520)
         root.addWidget(self.tbl_hist)
 
@@ -403,21 +436,21 @@ class SalesWindow(QWidget):
         #btnSecondary:hover { border-color: #3b82f6; color: #e2e8f0; }
 
         #btnSuccess {
-            background: #16a34a; border: none; border-radius: 8px;
-            padding: 6px 18px; font-weight: 700; color: white; min-height: 30px;
+            background: #052e16; border: 1px solid #15803d;
+            border-radius: 8px; padding: 6px 16px;
+            font-weight: 700; color: #4ade80; min-height: 30px;
         }
-        #btnSuccess:hover { background: #15803d; }
+        #btnSuccess:hover { background: #15803d; color: #fff; }
 
         #btnDanger {
-            background: #111c33; border: 1px solid #7f1d1d;
+            background: #1a0a0a; border: 1px solid #7f1d1d;
             border-radius: 8px; padding: 6px 12px;
             font-weight: 600; color: #f87171; min-height: 30px;
         }
-        #btnDanger:hover { background: #1a0a0a; border-color: #ef4444; }
+        #btnDanger:hover { background: #7f1d1d; color: #fff; }
 
         #totalLabel {
-            font-size: 16px; font-weight: 800;
-            color: #4ade80; letter-spacing: -0.3px;
+            font-size: 16px; font-weight: 800; color: #4ade80;
         }
 
         #innerTable {
@@ -445,23 +478,16 @@ class SalesWindow(QWidget):
         }
         QScrollBar::handle:vertical { background: #1e3a5f; border-radius: 3px; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
-
-        QPushButton#cobrarBtn {
-            background: #166534; border: 1px solid #15803d;
-            border-radius: 6px; padding: 3px 10px;
-            color: #4ade80; font-weight: 700; font-size: 12px;
-        }
-        QPushButton#cobrarBtn:hover { background: #15803d; }
         """
 
     # ── HELPERS ──────────────────────────────────────────
     def _fmt_money(self, value: float) -> str:
-        return (
-            "${:,.2f}".format(float(value or 0.0))
-            .replace(",", "X")
-            .replace(".", ",")
-            .replace("X", ".")
-        )
+        try:
+            n = int(round(float(value or 0)))
+            s = "${:,}".format(n).replace(",", "X").replace(".", ",").replace("X", ".")
+            return s
+        except Exception:
+            return "$0"
 
     def _toggle_metodo(self):
         self.cbo_metodo.setEnabled(
@@ -472,7 +498,7 @@ class SalesWindow(QWidget):
         if 0 <= index < len(self._productos_cache):
             precio = self._productos_cache[index]["precio_venta"]
             if precio > 0:
-                self.sp_precio.setValue(precio)
+                self.sp_precio.setValue(int(precio))
 
     def _customer_id_por_nombre(self) -> int | None:
         nombre = self.txt_cliente.text().strip()
@@ -505,7 +531,7 @@ class SalesWindow(QWidget):
         for s in ventas_pagina:
             row = self.tbl_hist.rowCount()
             self.tbl_hist.insertRow(row)
-            self.tbl_hist.setRowHeight(row, 32)
+            self.tbl_hist.setRowHeight(row, 34)
 
             cliente_nombre = s.customer.nombre if getattr(s, "customer", None) else "—"
             es_anulada = getattr(s, "anulada", False)
@@ -552,20 +578,38 @@ class SalesWindow(QWidget):
                         it.setBackground(QBrush(color_fila))
 
             sale_id = int(s.id)
-            btn = QPushButton("Ver detalle")
-            btn.setCursor(Qt.ArrowCursor)
-            btn.setStyleSheet(
+
+            # ── Botón Ver ─────────────────────────────────
+            btn_ver = QPushButton("👁 Ver")
+            btn_ver.setCursor(Qt.ArrowCursor)
+            btn_ver.setStyleSheet(
                 """
                 QPushButton {
                     background: #111c33; border: 1px solid #1e3a5f;
-                    border-radius: 6px; padding: 3px 10px;
-                    color: #93c5fd; font-size: 12px; font-weight: 600;
+                    border-radius: 5px; padding: 3px 10px;
+                    color: #93c5fd; font-size: 11px; font-weight: 600;
                 }
                 QPushButton:hover { background: #1e3a5f; color: #fff; }
             """
             )
-            btn.clicked.connect(lambda _, sid=sale_id: self.ver_detalle_venta(sid))
-            self.tbl_hist.setCellWidget(row, 5, btn)
+            btn_ver.clicked.connect(lambda _, sid=sale_id: self.ver_detalle_venta(sid))
+            self.tbl_hist.setCellWidget(row, 5, btn_ver)
+
+            # ── Botón PDF ─────────────────────────────────
+            btn_pdf = QPushButton("🖨 PDF")
+            btn_pdf.setCursor(Qt.ArrowCursor)
+            btn_pdf.setStyleSheet(
+                """
+                QPushButton {
+                    background: #0f2d1a; border: 1px solid #15803d;
+                    border-radius: 5px; padding: 3px 10px;
+                    color: #4ade80; font-size: 11px; font-weight: 600;
+                }
+                QPushButton:hover { background: #15803d; color: #fff; }
+            """
+            )
+            btn_pdf.clicked.connect(lambda _, sid=sale_id: self.recibo_pdf(sid))
+            self.tbl_hist.setCellWidget(row, 6, btn_pdf)
 
         self.tbl_hist.blockSignals(False)
 
@@ -770,14 +814,21 @@ class SalesWindow(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error al guardar", str(e))
             return
+
         estado_txt = "⏳ Pendiente de cobro" if es_pendiente else "✅ Pagado"
-        QMessageBox.information(
+
+        # Ofrecer imprimir recibo inmediatamente
+        resp_pdf = QMessageBox.question(
             self,
-            "Venta guardada",
+            "Venta guardada ✅",
             f"Venta {sale.numero_factura or f'#{sale.id}'} guardada.\n"
             f"Total: {self._fmt_money(float(sale.total))}\n"
-            f"Estado: {estado_txt}",
+            f"Estado: {estado_txt}\n\n"
+            f"¿Exportar recibo PDF ahora?",
         )
+        if resp_pdf == QMessageBox.Yes:
+            self.recibo_pdf(sale.id)
+
         self.items.clear()
         self.tbl.setRowCount(0)
         self.txt_cliente.clear()
@@ -959,8 +1010,24 @@ class SalesWindow(QWidget):
         txt.setMinimumHeight(480)
         lay.addWidget(txt)
 
+        # Botones del diálogo: Cerrar + PDF
+        row_btn = QHBoxLayout()
+        row_btn.setContentsMargins(12, 0, 12, 0)
+        row_btn.setSpacing(8)
+
+        btn_pdf_dlg = QPushButton("🖨  Exportar PDF")
+        btn_pdf_dlg.setCursor(Qt.ArrowCursor)
+        btn_pdf_dlg.setStyleSheet(
+            """
+            QPushButton { background:#052e16; color:#4ade80; border:1px solid #15803d;
+                          border-radius:6px; padding:7px 16px; font-weight:700; }
+            QPushButton:hover { background:#15803d; color:#fff; }
+        """
+        )
+        btn_pdf_dlg.clicked.connect(lambda: self.recibo_pdf(sale_id))
+
         btn_cerrar = QPushButton("Cerrar")
-        btn_cerrar.setFixedWidth(120)
+        btn_cerrar.setFixedWidth(100)
         btn_cerrar.setCursor(Qt.ArrowCursor)
         btn_cerrar.setStyleSheet(
             """
@@ -970,9 +1037,15 @@ class SalesWindow(QWidget):
         """
         )
         btn_cerrar.clicked.connect(dlg.accept)
-        row_btn = QHBoxLayout()
+
+        row_btn.addWidget(btn_pdf_dlg)
         row_btn.addStretch()
         row_btn.addWidget(btn_cerrar)
-        row_btn.addStretch()
         lay.addLayout(row_btn)
         dlg.exec()
+
+    # ── RECIBO PDF ────────────────────────────────────────
+    def recibo_pdf(self, sale_id: int) -> None:
+        from app.ui.sale_receipt import exportar_recibo_pdf
+
+        exportar_recibo_pdf(self, sale_id)

@@ -36,11 +36,18 @@ def _fmt_qty(x: float) -> str:
 
 
 def _fmt_cop(value: float) -> str:
+    """Formato COP: sin decimales, sin signo negativo, separador de miles con punto."""
     try:
-        s = "${:,.2f}".format(float(value or 0.0))
-        return s.replace(",", "X").replace(".", ",").replace("X", ".")
+        n = int(round(abs(float(value or 0.0))))
+        s = ""
+        digits = str(n)
+        for i, ch in enumerate(reversed(digits)):
+            if i > 0 and i % 3 == 0:
+                s = "." + s
+            s = ch + s
+        return "$" + s
     except Exception:
-        return "$0,00"
+        return "$0"
 
 
 def _item(
@@ -332,7 +339,6 @@ class KardexWindow(QWidget):
             self.cbo_producto.addItem(f"{p.codigo} - {p.nombre} ({unidad})", p.id)
 
     def _row_color(self, tipo: str) -> tuple[str, str]:
-        """Retorna (color_texto, color_fondo_hex) según tipo."""
         t = (tipo or "").upper().strip()
         if t == "ENTRADA":
             return "#4ade80", "#0d2b1a"
