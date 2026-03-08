@@ -119,6 +119,38 @@ class MetricCard(QFrame):
         self.lbl_sub.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         lay.addWidget(self.lbl_sub)
 
+    def _bg_color(self, hover: bool) -> str:
+        return "#0f1e36" if hover else "#0d1829"
+
+    def _apply_bg(self, hover: bool):
+        bg = self._bg_color(hover)
+        border = "#2d4a7a" if hover else "#1a2a45"
+        self.setStyleSheet(
+            f"""
+            #metricCard {{
+                background: {bg};
+                border: 1px solid {border};
+                border-radius: 12px;
+                min-height: 90px;
+            }}
+        """
+        )
+        for lbl in (self.lbl_label, self.lbl_value, self.lbl_sub):
+            ss = lbl.styleSheet()
+            # preservar color accent en lbl_value
+            if "color:" in ss:
+                lbl.setStyleSheet(ss)
+            else:
+                lbl.setStyleSheet(f"background: {bg};")
+
+    def enterEvent(self, event):
+        self._apply_bg(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._apply_bg(False)
+        super().leaveEvent(event)
+
     def set_value(self, value: str, sub: str = ""):
         self.lbl_value.setText(value)
         self.lbl_sub.setText(sub)
@@ -764,7 +796,6 @@ class MainWindow(QMainWindow):
             border-radius: 12px;
             min-height: 90px;
         }
-        #metricCard:hover { border-color: #2d4a7a; background: #0f1e36; }
 
         #metricIcon { font-size: 16px; }
         #metricLabel {

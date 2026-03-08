@@ -124,6 +124,7 @@ class Sale(Base):
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     numero_factura = Column(String(50), nullable=True)
     estado_pago = Column(String(20), default="PAGADO")
+    metodo_pago = Column(String(30), nullable=True)
     pagado_en = Column(DateTime, nullable=True)
 
     customer = relationship("Customer", back_populates="sales")

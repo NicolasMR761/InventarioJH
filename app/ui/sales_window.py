@@ -587,7 +587,7 @@ class SalesWindow(QWidget):
             sale_id = int(s.id)
 
             # ── Botón Ver ─────────────────────────────────
-            btn_ver = QPushButton("👁 Ver")
+            btn_ver = QPushButton(" Ver ")
             btn_ver.setCursor(Qt.ArrowCursor)
             btn_ver.setStyleSheet(
                 """
@@ -1025,6 +1025,11 @@ class SalesWindow(QWidget):
                                    text-transform:uppercase;letter-spacing:1px;'>Cliente</td>
                         <td style='padding:6px 0;color:#e2e8f0;font-size:13px;font-weight:600;'>
                             {cliente_nombre}</td></tr>
+                    <tr><td style='padding:6px 0;color:#475569;font-size:11px;
+                                   text-transform:uppercase;letter-spacing:1px;'>Método pago</td>
+                        <td style='padding:6px 0;color:#e2e8f0;font-size:13px;font-weight:600;'>
+                            {getattr(sale, "metodo_pago", None) or "—"}</td></tr>
+                    {"<tr><td style='padding:6px 0;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:1px;'>Anulada el</td><td style='padding:6px 0;color:#f87171;font-size:13px;font-weight:600;'>" + sale.anulada_en.strftime("%d/%m/%Y %H:%M") + "</td></tr>" if es_anulada and getattr(sale, "anulada_en", None) else ""}
                 </table>
             </div>
             <div style='padding:14px 28px 8px 28px;'>

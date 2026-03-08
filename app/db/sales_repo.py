@@ -102,6 +102,7 @@ def crear_venta(
             total=0.0,
             customer_id=int(customer_id) if customer_id else None,
             estado_pago=estado_pago,
+            metodo_pago=metodo_pago,
             numero_factura=(numero_factura or "").strip() or None,
             anulada=False,
             motivo_anulacion=None,
@@ -223,6 +224,7 @@ def registrar_pago_pendiente(sale_id: int, metodo_pago: str = "Efectivo") -> Sal
                 raise ValueError("Esta venta ya está pagada.")
 
             sale.estado_pago = "PAGADO"
+            sale.metodo_pago = metodo_pago
             sale.pagado_en = datetime.now()
             db.flush()
 

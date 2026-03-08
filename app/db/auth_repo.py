@@ -7,7 +7,7 @@ from app.db.database import SessionLocal
 from app.db.models import AdminUser
 
 # ── Clave maestra de recuperación (solo para el desarrollador) ──
-MASTER_KEY = "AdminMaster2026"
+MASTER_KEY = "AdminMaster2026"  # ⚠️ CAMBIAR antes de entregar al cliente
 
 
 def _hash(value: str) -> str:

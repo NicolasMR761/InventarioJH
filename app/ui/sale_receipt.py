@@ -160,8 +160,8 @@ def _build_pdf(path: str, sale) -> None:
 
     # ── Logo (si existe) ──────────────────────────────────────────────────────
     if has_logo:
-        logo_h = 18 * mm
-        logo_w = 40 * mm
+        logo_h = 28 * mm
+        logo_w = 60 * mm
         y -= logo_h + 3 * mm
         c.drawImage(
             str(logo_path),
