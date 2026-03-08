@@ -4,11 +4,47 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLineEdit,
     QDoubleSpinBox,
+    QSpinBox,
     QDialogButtonBox,
     QMessageBox,
     QCheckBox,
     QHBoxLayout,
 )
+from PySide6.QtGui import QValidator
+
+
+class CopSpinBox(QSpinBox):
+    """SpinBox COP: muestra $1.000, sube de 50 en 50."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimum(0)
+        self.setMaximum(99_999_999)
+        self.setSingleStep(50)
+        self.setPrefix("$")
+
+    def textFromValue(self, value: int) -> str:
+        s = ""
+        digits = str(abs(value))
+        for i, ch in enumerate(reversed(digits)):
+            if i > 0 and i % 3 == 0:
+                s = "." + s
+            s = ch + s
+        return s
+
+    def valueFromText(self, text: str) -> int:
+        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
+        try:
+            return int(clean)
+        except ValueError:
+            return 0
+
+    def validate(self, text: str, pos: int):
+        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
+        if clean == "" or clean.isdigit():
+            return (QValidator.Acceptable, text, pos)
+        return (QValidator.Invalid, text, pos)
+
 
 from app.db.products_repo import crear_producto, actualizar_producto
 
@@ -40,9 +76,7 @@ class ProductForm(QDialog):
         unidad_row.addStretch()
         # ────────────────────────────────────────────────────
 
-        self.sp_precio = QDoubleSpinBox()
-        self.sp_precio.setMaximum(10_000_000)
-        self.sp_precio.setDecimals(2)
+        self.sp_precio = CopSpinBox()
 
         self.sp_minimo = QDoubleSpinBox()
         self.sp_minimo.setMaximum(1_000_000)
@@ -81,7 +115,7 @@ class ProductForm(QDialog):
             self.chk_kg.setChecked(True)  # _toggle_kg se dispara automáticamente
         else:
             self.txt_unidad.setText(self.product.unidad or "und")
-        self.sp_precio.setValue(float(self.product.precio_venta or 0.0))
+        self.sp_precio.setValue(int(self.product.precio_venta or 0))
         self.sp_minimo.setValue(float(self.product.stock_minimo or 0.0))
 
     def guardar(self):
@@ -107,7 +141,7 @@ class ProductForm(QDialog):
                     codigo=codigo,
                     nombre=nombre,
                     unidad=unidad,
-                    precio_venta=self.sp_precio.value(),
+                    precio_venta=float(self.sp_precio.value()),
                     stock_minimo=self.sp_minimo.value(),
                 )
             else:
@@ -115,7 +149,7 @@ class ProductForm(QDialog):
                     codigo=codigo,
                     nombre=nombre,
                     unidad=unidad,
-                    precio_venta=self.sp_precio.value(),
+                    precio_venta=float(self.sp_precio.value()),
                     stock_minimo=self.sp_minimo.value(),
                 )
         except ValueError as e:

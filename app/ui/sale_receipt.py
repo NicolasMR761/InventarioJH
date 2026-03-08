@@ -80,7 +80,43 @@ def exportar_recibo_pdf(parent, sale_id: int) -> None:
         QMessageBox.information(parent, "Recibo", "Venta no encontrada.")
         return
 
-    # 3. Elegir destino
+    # 3. Elegir estilo
+    from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+
+    dlg_estilo = QDialog(parent)
+    dlg_estilo.setWindowTitle("Estilo del recibo")
+    dlg_estilo.setFixedWidth(320)
+    dlg_estilo.setStyleSheet(
+        "background:#0b1120; color:#e2e8f0; font-family:'Segoe UI';"
+    )
+    lay_e = QVBoxLayout(dlg_estilo)
+    lay_e.setSpacing(12)
+    lay_e.setContentsMargins(20, 20, 20, 20)
+    lbl_e = QLabel("¿Cómo deseas imprimir el recibo?")
+    lbl_e.setStyleSheet("font-size:13px; font-weight:600;")
+    lay_e.addWidget(lbl_e)
+    row_e = QHBoxLayout()
+    btn_color = QPushButton("🎨  A color")
+    btn_color.setStyleSheet(
+        "background:#1e3a5f; border:1px solid #3b82f6; border-radius:8px; padding:10px; font-weight:700; color:#93c5fd;"
+    )
+    btn_bw = QPushButton("🖨  Blanco y negro")
+    btn_bw.setStyleSheet(
+        "background:#1a1a1a; border:1px solid #475569; border-radius:8px; padding:10px; font-weight:700; color:#e2e8f0;"
+    )
+    row_e.addWidget(btn_color)
+    row_e.addWidget(btn_bw)
+    lay_e.addLayout(row_e)
+    _modo = ["color"]
+    btn_color.clicked.connect(
+        lambda: (_modo.__setitem__(0, "color"), dlg_estilo.accept())
+    )
+    btn_bw.clicked.connect(lambda: (_modo.__setitem__(0, "bw"), dlg_estilo.accept()))
+    if dlg_estilo.exec() != QDialog.Accepted:
+        return
+    modo_bw = _modo[0] == "bw"
+
+    # 4. Elegir destino
     factura_slug = (
         (sale.numero_factura or str(sale.id)).replace("/", "-").replace(" ", "_")
     )
@@ -91,9 +127,9 @@ def exportar_recibo_pdf(parent, sale_id: int) -> None:
     if not path:
         return
 
-    # 4. Construir PDF
+    # 5. Construir PDF
     try:
-        _build_pdf(path, sale)
+        _build_pdf(path, sale, modo_bw=modo_bw)
         QMessageBox.information(
             parent, "✅ Recibo exportado", f"Recibo guardado en:\n{path}"
         )
@@ -102,7 +138,7 @@ def exportar_recibo_pdf(parent, sale_id: int) -> None:
 
 
 # ── construcción del PDF ──────────────────────────────────────────────────────
-def _build_pdf(path: str, sale) -> None:
+def _build_pdf(path: str, sale, modo_bw: bool = False) -> None:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm, cm
     from reportlab.lib import colors
@@ -148,11 +184,35 @@ def _build_pdf(path: str, sale) -> None:
     c = rl_canvas.Canvas(path, pagesize=(PAGE_W, PAGE_H))
     W, H = PAGE_W, PAGE_H
 
-    # ── Fondo oscuro ─────────────────────────────────────────────────────────
-    c.setFillColor(colors.HexColor("#0b1120"))
+    # ── Paleta según modo ────────────────────────────────────────────────────
+    if modo_bw:
+        col_fondo = colors.white
+        col_texto = colors.black
+        col_subtexto = colors.HexColor("#444444")
+        col_fila_alt = colors.HexColor("#f0f0f0")
+        col_cabecera = colors.HexColor("#dddddd")
+        col_cab_txt = colors.HexColor("#333333")
+        col_total_txt = colors.black
+        col_pie = colors.HexColor("#666666")
+    else:
+        col_fondo = colors.HexColor("#0b1120")
+        col_texto = colors.HexColor("#f1f5f9")
+        col_subtexto = colors.HexColor("#475569")
+        col_fila_alt = colors.HexColor("#0d1829")
+        col_cabecera = colors.HexColor("#1e3a5f")
+        col_cab_txt = colors.HexColor("#94a3b8")
+        col_total_txt = colors.HexColor("#e2e8f0")
+        col_pie = colors.HexColor("#1e293b")
+
+    # En modo BW sobreescribir estado_color
+    if modo_bw:
+        estado_color = colors.HexColor("#333333")
+
+    # ── Fondo ────────────────────────────────────────────────────────────────
+    c.setFillColor(col_fondo)
     c.rect(0, 0, W, H, fill=1, stroke=0)
 
-    # ── Banda superior de color según estado ─────────────────────────────────
+    # ── Banda superior según estado ───────────────────────────────────────────
     c.setFillColor(estado_color)
     c.rect(0, H - 6 * mm, W, 6 * mm, fill=1, stroke=0)
 
@@ -163,15 +223,41 @@ def _build_pdf(path: str, sale) -> None:
         logo_h = 28 * mm
         logo_w = 60 * mm
         y -= logo_h + 3 * mm
+        # Logo con bordes redondeados usando clipping path
+        from reportlab.lib.utils import ImageReader
+        from reportlab.graphics import renderPDF
+        import math
+
+        lx = (W - logo_w) / 2
+        ly = y
+        r = 5 * mm  # radio de las esquinas
+
+        # Crear path redondeado como clipping
+        p = c.beginPath()
+        p.moveTo(lx + r, ly)
+        p.lineTo(lx + logo_w - r, ly)
+        p.arcTo(lx + logo_w - 2 * r, ly, lx + logo_w, ly + 2 * r, -90, 90)
+        p.lineTo(lx + logo_w, ly + logo_h - r)
+        p.arcTo(
+            lx + logo_w - 2 * r, ly + logo_h - 2 * r, lx + logo_w, ly + logo_h, 0, 90
+        )
+        p.lineTo(lx + r, ly + logo_h)
+        p.arcTo(lx, ly + logo_h - 2 * r, lx + 2 * r, ly + logo_h, 90, 90)
+        p.lineTo(lx, ly + r)
+        p.arcTo(lx, ly, lx + 2 * r, ly + 2 * r, 180, 90)
+        p.close()
+        c.saveState()
+        c.clipPath(p, stroke=0, fill=0)
         c.drawImage(
             str(logo_path),
-            (W - logo_w) / 2,
-            y,
+            lx,
+            ly,
             width=logo_w,
             height=logo_h,
             preserveAspectRatio=True,
             mask="auto",
         )
+        c.restoreState()
         y -= 3 * mm
     else:
         y -= 6 * mm
@@ -184,7 +270,7 @@ def _build_pdf(path: str, sale) -> None:
     empresa_tel = cfg.get("empresa_telefono", "")
     empresa_dir = cfg.get("empresa_direccion", "")
 
-    c.setFillColor(colors.HexColor("#f1f5f9"))
+    c.setFillColor(col_texto)
     c.setFont("Helvetica-Bold", 11)
     c.drawCentredString(W / 2, y, empresa_nombre.upper())
     y -= 5 * mm
@@ -204,7 +290,8 @@ def _build_pdf(path: str, sale) -> None:
     y -= 3 * mm
 
     # ── Línea divisora ────────────────────────────────────────────────────────
-    def hline(ypos, color="#1e3a5f", dash=None):
+    def hline(ypos, color=None, dash=None):
+        color = color or ("#444444" if modo_bw else "#1e3a5f")
         c.setStrokeColor(colors.HexColor(color))
         c.setLineWidth(0.5)
         if dash:
@@ -216,7 +303,7 @@ def _build_pdf(path: str, sale) -> None:
     y -= 5 * mm
 
     # ── N° Factura + estado ───────────────────────────────────────────────────
-    c.setFillColor(colors.HexColor("#e2e8f0"))
+    c.setFillColor(col_texto)
     c.setFont("Helvetica-Bold", 9)
     c.drawCentredString(W / 2, y, f"FACTURA  {factura_txt}")
     y -= 5 * mm
@@ -236,10 +323,10 @@ def _build_pdf(path: str, sale) -> None:
 
     # ── Info cliente / fecha ──────────────────────────────────────────────────
     def row_info(label: str, value: str, ypos: float) -> float:
-        c.setFillColor(colors.HexColor("#475569"))
+        c.setFillColor(col_subtexto)
         c.setFont("Helvetica", 6.5)
         c.drawString(4 * mm, ypos, label.upper())
-        c.setFillColor(colors.HexColor("#e2e8f0"))
+        c.setFillColor(col_texto)
         c.setFont("Helvetica-Bold", 7.5)
         c.drawRightString(W - 4 * mm, ypos, value)
         return ypos - 5 * mm
@@ -277,18 +364,18 @@ def _build_pdf(path: str, sale) -> None:
 
         # Fila alterna
         if i % 2 == 0:
-            c.setFillColor(colors.HexColor("#0d1829"))
+            c.setFillColor(col_fila_alt)
             c.rect(4 * mm, y - 1 * mm, W - 8 * mm, row_h, fill=1, stroke=0)
 
-        c.setFillColor(colors.HexColor("#cbd5e1"))
+        c.setFillColor(col_texto)
         c.setFont("Helvetica", 7)
         c.drawString(5 * mm, y + 1 * mm, nombre)
 
-        c.setFillColor(colors.HexColor("#94a3b8"))
+        c.setFillColor(col_subtexto)
         c.setFont("Helvetica", 6.5)
         c.drawCentredString(col_mid, y + 1 * mm, cant_x_precio)
 
-        c.setFillColor(colors.HexColor("#4ade80"))
+        c.setFillColor(col_total_txt if modo_bw else colors.HexColor("#4ade80"))
         c.setFont("Helvetica-Bold", 7)
         c.drawRightString(col_sub, y + 1 * mm, subtot)
 
@@ -299,10 +386,10 @@ def _build_pdf(path: str, sale) -> None:
     y -= 5 * mm
 
     # ── Total ─────────────────────────────────────────────────────────────────
-    c.setFillColor(colors.HexColor("#475569"))
+    c.setFillColor(col_subtexto)
     c.setFont("Helvetica", 8)
     c.drawString(4 * mm, y, "TOTAL")
-    c.setFillColor(estado_color)
+    c.setFillColor(col_total_txt if modo_bw else estado_color)
     c.setFont("Helvetica-Bold", 13)
     c.drawRightString(W - 4 * mm, y - 1 * mm, _cop(sale.total))
     y -= 10 * mm
@@ -311,11 +398,11 @@ def _build_pdf(path: str, sale) -> None:
     y -= 5 * mm
 
     # ── Pie ───────────────────────────────────────────────────────────────────
-    c.setFillColor(colors.HexColor("#1e293b"))
+    c.setFillColor(col_pie)
     c.setFont("Helvetica", 6)
     c.drawCentredString(W / 2, y, "Gracias por su compra")
     y -= 4 * mm
-    c.setFillColor(colors.HexColor("#0f172a"))
+    c.setFillColor(col_subtexto)
     c.setFont("Helvetica", 5.5)
     c.drawCentredString(W / 2, y, f"Generado por {empresa_nombre}")
 

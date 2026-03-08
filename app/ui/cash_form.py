@@ -4,11 +4,47 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QSpinBox,
     QPushButton,
     QMessageBox,
     QTextEdit,
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QValidator
+
+
+class CopSpinBox(QSpinBox):
+    """SpinBox COP: muestra $1.000, sube de 50 en 50."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimum(1)
+        self.setMaximum(999_999_999)
+        self.setSingleStep(50)
+        self.setPrefix("$")
+
+    def textFromValue(self, value: int) -> str:
+        s = ""
+        digits = str(abs(value))
+        for i, ch in enumerate(reversed(digits)):
+            if i > 0 and i % 3 == 0:
+                s = "." + s
+            s = ch + s
+        return s
+
+    def valueFromText(self, text: str) -> int:
+        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
+        try:
+            return int(clean)
+        except ValueError:
+            return 0
+
+    def validate(self, text: str, pos: int):
+        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
+        if clean == "" or clean.isdigit():
+            return (QValidator.Acceptable, text, pos)
+        return (QValidator.Invalid, text, pos)
+
 
 from app.db.cash_repo import registrar_movimiento
 
@@ -53,10 +89,8 @@ class CashForm(QDialog):
         lbl_monto = QLabel("Monto: *")
         lbl_monto.setFixedWidth(120)
         row_monto.addWidget(lbl_monto)
-        self.txt_monto = QLineEdit()
-        self.txt_monto.setPlaceholderText("Ej: 5000 o 5.000 o 5000,50  (sin $)")
-        self.txt_monto.setAlignment(Qt.AlignRight)
-        row_monto.addWidget(self.txt_monto)
+        self.sp_monto = CopSpinBox()
+        row_monto.addWidget(self.sp_monto)
         layout.addLayout(row_monto)
 
         # Referencia
@@ -91,38 +125,7 @@ class CashForm(QDialog):
         layout.addLayout(buttons)
 
     def _parse_monto(self) -> float:
-        """
-        Acepta formatos: 5000 / 5.000 / 5000,50 / 5.000,50 / $5.000
-        """
-        raw = (self.txt_monto.text() or "").strip()
-        if not raw:
-            raise ValueError("El monto es obligatorio.")
-
-        raw = raw.replace("$", "").replace(" ", "")
-
-        has_dot = "." in raw
-        has_comma = "," in raw
-
-        if has_dot and has_comma:
-            last_dot = raw.rfind(".")
-            last_comma = raw.rfind(",")
-            if last_comma > last_dot:
-                raw = raw.replace(".", "").replace(",", ".")
-            else:
-                raw = raw.replace(",", "")
-        elif has_comma and not has_dot:
-            raw = raw.replace(",", ".")
-        elif has_dot and not has_comma:
-            parts = raw.split(".")
-            if (
-                len(parts) == 2
-                and len(parts[1]) == 3
-                and parts[0].isdigit()
-                and parts[1].isdigit()
-            ):
-                raw = raw.replace(".", "")
-
-        monto = float(raw)
+        monto = float(self.sp_monto.value())
         if monto <= 0:
             raise ValueError("El monto debe ser mayor a 0.")
         return monto
@@ -143,7 +146,6 @@ class CashForm(QDialog):
             monto = self._parse_monto()
         except ValueError as e:
             QMessageBox.warning(self, "Monto inválido", str(e))
-            self.txt_monto.setFocus()
             return
 
         referencia = (self.txt_referencia.text() or "").strip() or None
