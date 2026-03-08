@@ -1,8 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+import os
 
 block_cipher = None
+
+venv_site = r'.venv\Lib\site-packages'
 
 a = Analysis(
     ['app\\main.py'],
@@ -11,7 +14,9 @@ a = Analysis(
     datas=[
         ('assets', 'assets'),
         ('app', 'app'),
-    ] + collect_data_files('reportlab') + collect_data_files('openpyxl'),
+        (os.path.join(venv_site, 'reportlab'), 'reportlab'),
+        (os.path.join(venv_site, 'openpyxl'), 'openpyxl'),
+    ],
     hiddenimports=[
         'sqlalchemy',
         'sqlalchemy.dialects.sqlite',
@@ -20,6 +25,11 @@ a = Analysis(
         'sqlalchemy.ext.declarative',
         *collect_submodules('reportlab'),
         *collect_submodules('openpyxl'),
+        *collect_submodules('PIL'),
+        'PIL',
+        'PIL.Image',
+        'PIL.ImageDraw',
+        'PIL.ImageFont',
         'PySide6.QtCore',
         'PySide6.QtWidgets',
         'PySide6.QtGui',
@@ -31,7 +41,7 @@ a = Analysis(
     runtime_hooks=['hook_reportlab.py'],
     excludes=[
         'tkinter', 'matplotlib', 'numpy', 'pandas',
-        'scipy', 'PIL', 'cv2', 'PyQt5', 'PyQt6',
+        'scipy', 'cv2', 'PyQt5', 'PyQt6',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
