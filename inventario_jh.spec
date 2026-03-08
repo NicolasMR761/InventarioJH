@@ -13,17 +13,13 @@ a = Analysis(
         ('app', 'app'),
     ] + collect_data_files('reportlab') + collect_data_files('openpyxl'),
     hiddenimports=[
-        # SQLAlchemy
         'sqlalchemy',
         'sqlalchemy.dialects.sqlite',
         'sqlalchemy.dialects.sqlite.pysqlite',
         'sqlalchemy.orm',
         'sqlalchemy.ext.declarative',
-        # ReportLab completo
         *collect_submodules('reportlab'),
-        # OpenPyXL completo
         *collect_submodules('openpyxl'),
-        # PySide6
         'PySide6.QtCore',
         'PySide6.QtWidgets',
         'PySide6.QtGui',
@@ -32,7 +28,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['hook_reportlab.py'],
     excludes=[
         'tkinter', 'matplotlib', 'numpy', 'pandas',
         'scipy', 'PIL', 'cv2', 'PyQt5', 'PyQt6',

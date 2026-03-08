@@ -5,8 +5,8 @@
 ; Compilar: Abrir este archivo en Inno Setup y presionar F9
 ; ─────────────────────────────────────────────────────────────
 
-#define AppName      "Inventario JH"
-#define AppVersion   "1.7.0"
+#define AppName      "Inventario Zarza"
+#define AppVersion   "1.8.2"
 #define AppPublisher "La Zarza Distribuidora"
 #define AppExeName   "InventarioJH.exe"
 #define AppIcon      "assets\icon.ico"
