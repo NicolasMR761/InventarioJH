@@ -1,32 +1,29 @@
-# inventario_jh.spec
-# ─────────────────────────────────────────────────────────────
-# Ejecutar con:  pyinstaller inventario_jh.spec
-# ─────────────────────────────────────────────────────────────
+# -*- mode: python ; coding: utf-8 -*-
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
-import sys, os
 
 block_cipher = None
 
-# Recopilar datos de PySide6
-pyside6_datas = collect_data_files('PySide6')
-
 a = Analysis(
-    ['run.py'],
+    ['app\\main.py'],
     pathex=['.'],
     binaries=[],
     datas=[
-        ('assets', 'assets'),           # ícono .ico
-        ('app', 'app'),                 # código fuente
-    ] + pyside6_datas,
+        ('assets', 'assets'),
+        ('app', 'app'),
+    ] + collect_data_files('reportlab') + collect_data_files('openpyxl'),
     hiddenimports=[
+        # SQLAlchemy
         'sqlalchemy',
         'sqlalchemy.dialects.sqlite',
+        'sqlalchemy.dialects.sqlite.pysqlite',
         'sqlalchemy.orm',
-        'reportlab',
-        'reportlab.pdfgen',
-        'reportlab.lib',
-        'reportlab.platypus',
+        'sqlalchemy.ext.declarative',
+        # ReportLab completo
+        *collect_submodules('reportlab'),
+        # OpenPyXL completo
+        *collect_submodules('openpyxl'),
+        # PySide6
         'PySide6.QtCore',
         'PySide6.QtWidgets',
         'PySide6.QtGui',
@@ -58,8 +55,8 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,                      # Sin ventana de consola
-    icon='assets/icon.ico',             # Ícono del .exe
+    console=False,
+    icon='assets\\icon.ico',
 )
 
 coll = COLLECT(

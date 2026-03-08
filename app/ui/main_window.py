@@ -25,7 +25,7 @@ from PySide6.QtGui import QPainter, QPen, QLinearGradient, QColor as QColorG
 from PySide6.QtCore import QRect, QPoint
 from app.utils.backup import crear_backup
 
-APP_VERSION = "v1.8.1"
+APP_VERSION = "v1.8.2"
 
 
 # ─────────────────────────────────────────────
