@@ -778,11 +778,12 @@ class SalesWindow(QWidget):
                 i["cantidad"] for i in self.items if i["product_id"] == product_id
             )
             stock_real = stock_disp - ya_en_form
+            nombre_simple = nombre.split("  (")[0]
             if cantidad > stock_real:
                 QMessageBox.warning(
                     self,
                     "Stock insuficiente",
-                    f"'{nombre.split("  (")[0]}' solo tiene {int(stock_real) if stock_real == int(stock_real) else stock_real:g} unidad(es) disponible(s).\n"
+                    f"'{nombre_simple}' solo tiene {int(stock_real) if stock_real == int(stock_real) else stock_real:g} unidad(es) disponible(s).\n"
                     f"Ya tienes {ya_en_form} en este pedido.",
                 )
                 return
