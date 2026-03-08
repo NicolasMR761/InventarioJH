@@ -986,6 +986,18 @@ class SalesWindow(QWidget):
                     {self._fmt_money(float(d.subtotal or 0))}</td>
             </tr>"""
 
+        metodo_pago_txt = getattr(sale, "metodo_pago", None) or "—"
+        if es_anulada and getattr(sale, "anulada_en", None):
+            anulada_row_html = (
+                "<tr><td style='padding:6px 0;color:#475569;font-size:11px;"
+                "text-transform:uppercase;letter-spacing:1px;'>Anulada el</td>"
+                "<td style='padding:6px 0;color:#f87171;font-size:13px;font-weight:600;'>"
+                + sale.anulada_en.strftime("%d/%m/%Y %H:%M")
+                + "</td></tr>"
+            )
+        else:
+            anulada_row_html = ""
+
         html = f"""
         <html><body style='margin:0;padding:0;background:#0a0f1e;
                            font-family:"Segoe UI",Arial,sans-serif;'>
@@ -1026,10 +1038,10 @@ class SalesWindow(QWidget):
                         <td style='padding:6px 0;color:#e2e8f0;font-size:13px;font-weight:600;'>
                             {cliente_nombre}</td></tr>
                     <tr><td style='padding:6px 0;color:#475569;font-size:11px;
-                                   text-transform:uppercase;letter-spacing:1px;'>Método pago</td>
+                                   text-transform:uppercase;letter-spacing:1px;'>M&eacute;todo pago</td>
                         <td style='padding:6px 0;color:#e2e8f0;font-size:13px;font-weight:600;'>
-                            {getattr(sale, "metodo_pago", None) or "—"}</td></tr>
-                    {"<tr><td style='padding:6px 0;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:1px;'>Anulada el</td><td style='padding:6px 0;color:#f87171;font-size:13px;font-weight:600;'>" + sale.anulada_en.strftime("%d/%m/%Y %H:%M") + "</td></tr>" if es_anulada and getattr(sale, "anulada_en", None) else ""}
+                            {metodo_pago_txt}</td></tr>
+                    {anulada_row_html}
                 </table>
             </div>
             <div style='padding:14px 28px 8px 28px;'>
