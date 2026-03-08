@@ -734,7 +734,11 @@ class CashWindow(QWidget):
             w, h = letter
             y = h - 2 * cm
             c.setFont("Helvetica-Bold", 14)
-            c.drawString(2 * cm, y, "Reporte de Caja")
+            from app.utils.config_manager import cargar_config
+
+            _cfg = cargar_config()
+            _nombre_empresa = _cfg.get("empresa_nombre") or "Inventario JH"
+            c.drawString(2 * cm, y, f"Reporte de Caja — {_nombre_empresa}")
             y -= 0.7 * cm
             c.setFont("Helvetica", 10)
             c.drawString(2 * cm, y, f"Rango: {d1} a {d2}")
