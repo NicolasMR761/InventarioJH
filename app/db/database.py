@@ -8,11 +8,17 @@ from pathlib import Path
 
 
 def get_app_data_dir() -> Path:
-    # database.py está en app/db/database.py => subir 2 niveles al root del proyecto
-    project_root = Path(__file__).resolve().parents[2]
-    data_dir = project_root / "app_data"
-    data_dir.mkdir(exist_ok=True)
-    return data_dir
+    import sys, os
+
+    if getattr(sys, "frozen", False):
+        # Ejecutable compilado → usar %LOCALAPPDATA%\InventarioJH
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "InventarioJH"
+    else:
+        # Desarrollo → usar app_data/ junto al proyecto
+        project_root = Path(__file__).resolve().parents[2]
+        base = project_root / "app_data"
+    base.mkdir(parents=True, exist_ok=True)
+    return base
 
 
 def get_engine():
