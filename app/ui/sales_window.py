@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QComboBox,
     QSpinBox,
+    QDoubleSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QMessageBox,
@@ -34,6 +35,7 @@ from app.db.sales_repo import (
     registrar_pago_pendiente,
 )
 from app.utils.formatters import fmt_fecha
+from app.ui.widgets import CommaDoubleSpinBox
 
 
 class CopSpinBox(QSpinBox):
@@ -74,6 +76,8 @@ class CopSpinBox(QSpinBox):
         if clean == "" or clean.isdigit():
             return (QValidator.Acceptable, text, pos)
         return (QValidator.Invalid, text, pos)
+
+
 
 
 class _FixedTable(QTableWidget):
@@ -160,12 +164,14 @@ class SalesWindow(QWidget):
         lbl_c = QLabel("Cant:")
         lbl_c.setObjectName("fieldLabel")
         row1.addWidget(lbl_c)
-        self.sp_cant = QSpinBox()
+        self.sp_cant = CommaDoubleSpinBox()
         self.sp_cant.setObjectName("spinBox")
-        self.sp_cant.setMinimum(1)
-        self.sp_cant.setMaximum(999999)
-        self.sp_cant.setValue(1)
-        self.sp_cant.setFixedWidth(80)
+        self.sp_cant.setMinimum(0.001)
+        self.sp_cant.setMaximum(999999.999)
+        self.sp_cant.setValue(1.0)
+        self.sp_cant.setDecimals(3)
+        self.sp_cant.setSingleStep(0.5)
+        self.sp_cant.setFixedWidth(100)
         row1.addWidget(self.sp_cant)
 
         lbl_pr = QLabel("Precio:")
@@ -760,7 +766,7 @@ class SalesWindow(QWidget):
             return
         product_id = int(self.cbo_producto.currentData())
         nombre = self.cbo_producto.currentText()
-        cantidad = int(self.sp_cant.value())
+        cantidad = float(self.sp_cant.value())
         precio = float(self.sp_precio.value())
         if cantidad <= 0:
             QMessageBox.warning(self, "Ventas", "La cantidad debe ser mayor que 0.")
@@ -783,8 +789,8 @@ class SalesWindow(QWidget):
                 QMessageBox.warning(
                     self,
                     "Stock insuficiente",
-                    f"'{nombre_simple}' solo tiene {int(stock_real) if stock_real == int(stock_real) else stock_real:g} unidad(es) disponible(s).\n"
-                    f"Ya tienes {ya_en_form} en este pedido.",
+                    f"'{nombre_simple}' solo tiene {stock_real:g} unidad(es) disponible(s).\n"
+                    f"Ya tienes {ya_en_form:g} en este pedido.",
                 )
                 return
 
@@ -797,7 +803,8 @@ class SalesWindow(QWidget):
         self.tbl.setRowHeight(row, 30)
         self.tbl.setItem(row, 0, QTableWidgetItem(str(product_id)))
         self.tbl.setItem(row, 1, QTableWidgetItem(nombre))
-        it_c = QTableWidgetItem(str(cantidad))
+        cant_txt = f"{cantidad:g}" if cantidad != int(cantidad) else str(int(cantidad))
+        it_c = QTableWidgetItem(cant_txt)
         it_c.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.tbl.setItem(row, 2, it_c)
         it_p = QTableWidgetItem(self._fmt_money(precio))

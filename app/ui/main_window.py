@@ -421,6 +421,7 @@ class MainWindow(QMainWindow):
             ("🛒 Ventas", "Registrar ventas · fiados", self.abrir_ventas, 1, 0),
             ("💰 Caja", "Movimientos · cierres · reportes", self.abrir_caja, 1, 1),
             ("📒 Kardex", "Trazabilidad por producto", self.abrir_kardex, 1, 2),
+            ("👥 Clientes", "Historial de compras · exportar PDF", self.abrir_clientes, 2, 0),
         ]
         for title, desc, slot, r, c in tiles:
             t = self._make_tile(title, desc, slot)
@@ -691,6 +692,12 @@ class MainWindow(QMainWindow):
 
         self.win_kardex = KardexWindow()
         self.win_kardex.show()
+
+    def abrir_clientes(self):
+        from app.ui.customers_window import CustomersWindow
+
+        self.win_clientes = CustomersWindow()
+        self.win_clientes.show()
 
     def abrir_configuracion(self):
         from app.ui.settings_window import SettingsWindow

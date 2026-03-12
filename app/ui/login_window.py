@@ -143,7 +143,7 @@ class LoginWindow(QWidget):
 
         lay.addStretch()
 
-        lbl_version = QLabel("v1.4.0")
+        lbl_version = QLabel("v1.8.2")
         lbl_version.setObjectName("versionLabel")
         lbl_version.setAlignment(Qt.AlignCenter)
         lay.addWidget(lbl_version)

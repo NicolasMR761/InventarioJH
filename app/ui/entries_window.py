@@ -19,6 +19,7 @@ from PySide6.QtGui import QColor, QBrush, QFont
 from app.db.entries_repo import crear_entrada
 from app.db.products_repo import listar_productos
 from app.db.suppliers_repo import listar_proveedores
+from app.ui.widgets import CommaDelegate
 
 
 class EntriesWindow(QWidget):
@@ -161,6 +162,10 @@ class EntriesWindow(QWidget):
         self.table.setColumnWidth(3, 140)
 
         layout.addWidget(self.table, 1)
+
+        # Delegado: columnas Cantidad (1) y Precio (2) usan coma como decimal
+        self._comma_delegate = CommaDelegate(columns=[1, 2])
+        self.table.setItemDelegate(self._comma_delegate)
 
         # ── FOOTER: total + guardar ─────────────────────────
         sep2 = QFrame()

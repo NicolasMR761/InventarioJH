@@ -11,6 +11,9 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
 )
 from PySide6.QtGui import QValidator
+from PySide6.QtCore import QLocale
+
+from app.ui.widgets import CommaDoubleSpinBox
 
 
 class CopSpinBox(QSpinBox):
@@ -78,7 +81,7 @@ class ProductForm(QDialog):
 
         self.sp_precio = CopSpinBox()
 
-        self.sp_minimo = QDoubleSpinBox()
+        self.sp_minimo = CommaDoubleSpinBox()
         self.sp_minimo.setMaximum(1_000_000)
         self.sp_minimo.setDecimals(2)
 
