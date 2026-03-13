@@ -599,23 +599,6 @@ class CustomersWindow(QWidget):
 # ─────────────────────────────────────────────────────────────────────────────
 def mostrar_factura_compacta(parent, sale_id: int) -> None:
     """Muestra diálogo con factura compacta de la venta y permite exportar a PDF."""
-    try:
-        from reportlab.lib.pagesizes import A4
-    except ImportError:
-        QMessageBox.critical(
-            parent,
-            "Dependencia faltante",
-            "Instala reportlab:\n\n  pip install reportlab",
-        )
-        return
-
-    from app.db.sales_repo import obtener_venta_con_detalle
-
-    sale = obtener_venta_con_detalle(sale_id)
-    if not sale:
-        QMessageBox.information(parent, "Factura", "Venta no encontrada.")
-        return
-
     from app.ui.sale_receipt import exportar_recibo_pdf
 
     exportar_recibo_pdf(parent, sale_id)

@@ -184,7 +184,7 @@ def crear_venta(
                 registrar_movimiento_en_db(
                     db,
                     tipo="INGRESO",
-                    concepto=f"Venta {sale.numero_factura}",
+                    concepto=f"Venta {sale.numero_factura or f'#{sale.id}'}",
                     monto=float(sale.total),
                     referencia=f"Venta #{sale.id}",
                     observacion=observacion,

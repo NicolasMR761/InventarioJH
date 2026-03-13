@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QColor, QBrush, QFont
 
 from app.db.products_repo import listar_productos, cambiar_estado_producto
+from app.utils.formatters import fmt_qty
 
 
 class ProductsWindow(QWidget):
@@ -316,11 +317,7 @@ class ProductsWindow(QWidget):
             self.table.setItem(row, 3, it_unidad)
 
             # Stock
-            stock_txt = (
-                f"{int(stock)}"
-                if stock == int(stock)
-                else f"{stock:.2f}".replace(".", ",")
-            )
+            stock_txt = fmt_qty(stock)
             it_stock = cell(stock_txt, Qt.AlignRight | Qt.AlignVCenter)
             if es_bajo:
                 it_stock.setForeground(QBrush(QColor("#f87171")))

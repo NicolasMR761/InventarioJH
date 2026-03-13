@@ -34,7 +34,7 @@ from app.db.sales_repo import (
     anular_venta,
     registrar_pago_pendiente,
 )
-from app.utils.formatters import fmt_fecha
+from app.utils.formatters import fmt_fecha, fmt_qty
 from app.ui.widgets import CommaDoubleSpinBox
 
 
@@ -682,11 +682,7 @@ class SalesWindow(QWidget):
                 }
             )
             stock = float(p.stock_actual or 0)
-            stock_txt = (
-                str(int(stock))
-                if stock == int(stock)
-                else f"{stock:.2f}".replace(".", ",")
-            )
+            stock_txt = fmt_qty(stock)
             self.cbo_producto.addItem(f"{p.nombre}  (Stock: {stock_txt})", p.id)
         self.cbo_producto.blockSignals(False)
         self._autocompletar_precio(self.cbo_producto.currentIndex())
@@ -788,16 +784,8 @@ class SalesWindow(QWidget):
             stock_real = stock_disp - ya_en_form
             nombre_simple = nombre.split("  (")[0]
             if cantidad > stock_real:
-                stock_disp_txt = (
-                    str(int(stock_real))
-                    if stock_real == int(stock_real)
-                    else f"{stock_real:.2f}".replace(".", ",")
-                )
-                ya_disp_txt = (
-                    str(int(ya_en_form))
-                    if ya_en_form == int(ya_en_form)
-                    else f"{ya_en_form:.2f}".replace(".", ",")
-                )
+                stock_disp_txt = fmt_qty(stock_real)
+                ya_disp_txt = fmt_qty(ya_en_form)
                 QMessageBox.warning(
                     self,
                     "Stock insuficiente",
@@ -815,11 +803,7 @@ class SalesWindow(QWidget):
         self.tbl.setRowHeight(row, 30)
         self.tbl.setItem(row, 0, QTableWidgetItem(str(product_id)))
         self.tbl.setItem(row, 1, QTableWidgetItem(nombre))
-        cant_txt = (
-            str(int(cantidad))
-            if cantidad == int(cantidad)
-            else f"{cantidad:.2f}".replace(".", ",")
-        )
+        cant_txt = fmt_qty(cantidad)
         it_c = QTableWidgetItem(cant_txt)
         it_c.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.tbl.setItem(row, 2, it_c)
@@ -995,9 +979,7 @@ class SalesWindow(QWidget):
         for d in sale.details:
             nombre = d.product.nombre if d.product else f"Producto #{d.product_id}"
             cant = float(d.cantidad or 0)
-            cant_txt = (
-                str(int(cant)) if cant == int(cant) else f"{cant:.2f}".replace(".", ",")
-            )
+            cant_txt = fmt_qty(cant)
             items_html += f"""
             <tr>
                 <td style='padding:7px 0;color:#cbd5e1;font-size:13px;

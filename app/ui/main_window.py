@@ -24,8 +24,7 @@ from app.db.database import init_db, get_app_data_dir
 from PySide6.QtGui import QPainter, QPen, QLinearGradient, QColor as QColorG
 from PySide6.QtCore import QRect, QPoint
 from app.utils.backup import crear_backup
-
-APP_VERSION = "v1.8.2"
+from app.version import APP_VERSION
 
 
 # ─────────────────────────────────────────────
@@ -421,7 +420,13 @@ class MainWindow(QMainWindow):
             ("🛒 Ventas", "Registrar ventas · fiados", self.abrir_ventas, 1, 0),
             ("💰 Caja", "Movimientos · cierres · reportes", self.abrir_caja, 1, 1),
             ("📒 Kardex", "Trazabilidad por producto", self.abrir_kardex, 1, 2),
-            ("👥 Clientes", "Historial de compras · exportar PDF", self.abrir_clientes, 2, 0),
+            (
+                "👥 Clientes",
+                "Historial de compras · exportar PDF",
+                self.abrir_clientes,
+                2,
+                0,
+            ),
         ]
         for title, desc, slot, r, c in tiles:
             t = self._make_tile(title, desc, slot)
