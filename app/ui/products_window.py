@@ -316,7 +316,11 @@ class ProductsWindow(QWidget):
             self.table.setItem(row, 3, it_unidad)
 
             # Stock
-            stock_txt = f"{int(stock)}" if stock == int(stock) else f"{stock:.2f}"
+            stock_txt = (
+                f"{int(stock)}"
+                if stock == int(stock)
+                else f"{stock:.2f}".replace(".", ",")
+            )
             it_stock = cell(stock_txt, Qt.AlignRight | Qt.AlignVCenter)
             if es_bajo:
                 it_stock.setForeground(QBrush(QColor("#f87171")))

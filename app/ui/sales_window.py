@@ -78,8 +78,6 @@ class CopSpinBox(QSpinBox):
         return (QValidator.Invalid, text, pos)
 
 
-
-
 class _FixedTable(QTableWidget):
     """
     Tabla con altura fija y scroll interno propio.
@@ -166,10 +164,10 @@ class SalesWindow(QWidget):
         row1.addWidget(lbl_c)
         self.sp_cant = CommaDoubleSpinBox()
         self.sp_cant.setObjectName("spinBox")
-        self.sp_cant.setMinimum(0.001)
-        self.sp_cant.setMaximum(999999.999)
+        self.sp_cant.setMinimum(0.01)
+        self.sp_cant.setMaximum(999999.99)
         self.sp_cant.setValue(1.0)
-        self.sp_cant.setDecimals(3)
+        self.sp_cant.setDecimals(2)
         self.sp_cant.setSingleStep(0.5)
         self.sp_cant.setFixedWidth(100)
         row1.addWidget(self.sp_cant)
@@ -684,7 +682,11 @@ class SalesWindow(QWidget):
                 }
             )
             stock = float(p.stock_actual or 0)
-            stock_txt = str(int(stock)) if stock == int(stock) else f"{stock:g}"
+            stock_txt = (
+                str(int(stock))
+                if stock == int(stock)
+                else f"{stock:.2f}".replace(".", ",")
+            )
             self.cbo_producto.addItem(f"{p.nombre}  (Stock: {stock_txt})", p.id)
         self.cbo_producto.blockSignals(False)
         self._autocompletar_precio(self.cbo_producto.currentIndex())
@@ -786,11 +788,21 @@ class SalesWindow(QWidget):
             stock_real = stock_disp - ya_en_form
             nombre_simple = nombre.split("  (")[0]
             if cantidad > stock_real:
+                stock_disp_txt = (
+                    str(int(stock_real))
+                    if stock_real == int(stock_real)
+                    else f"{stock_real:.2f}".replace(".", ",")
+                )
+                ya_disp_txt = (
+                    str(int(ya_en_form))
+                    if ya_en_form == int(ya_en_form)
+                    else f"{ya_en_form:.2f}".replace(".", ",")
+                )
                 QMessageBox.warning(
                     self,
                     "Stock insuficiente",
-                    f"'{nombre_simple}' solo tiene {stock_real:g} unidad(es) disponible(s).\n"
-                    f"Ya tienes {ya_en_form:g} en este pedido.",
+                    f"'{nombre_simple}' solo tiene {stock_disp_txt} unidad(es) disponible(s).\n"
+                    f"Ya tienes {ya_disp_txt} en este pedido.",
                 )
                 return
 
@@ -803,7 +815,11 @@ class SalesWindow(QWidget):
         self.tbl.setRowHeight(row, 30)
         self.tbl.setItem(row, 0, QTableWidgetItem(str(product_id)))
         self.tbl.setItem(row, 1, QTableWidgetItem(nombre))
-        cant_txt = f"{cantidad:g}" if cantidad != int(cantidad) else str(int(cantidad))
+        cant_txt = (
+            str(int(cantidad))
+            if cantidad == int(cantidad)
+            else f"{cantidad:.2f}".replace(".", ",")
+        )
         it_c = QTableWidgetItem(cant_txt)
         it_c.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.tbl.setItem(row, 2, it_c)
@@ -979,7 +995,9 @@ class SalesWindow(QWidget):
         for d in sale.details:
             nombre = d.product.nombre if d.product else f"Producto #{d.product_id}"
             cant = float(d.cantidad or 0)
-            cant_txt = f"{int(cant)}" if cant == int(cant) else f"{cant:g}"
+            cant_txt = (
+                str(int(cant)) if cant == int(cant) else f"{cant:.2f}".replace(".", ",")
+            )
             items_html += f"""
             <tr>
                 <td style='padding:7px 0;color:#cbd5e1;font-size:13px;

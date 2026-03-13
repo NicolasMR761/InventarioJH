@@ -7,22 +7,38 @@ Módulo de Clientes:
   · Exportar historial a PDF (factura de historial)
 ──────────────────────────────────────────────────────────────────────────────
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QMessageBox, QLineEdit,
-    QHeaderView, QFrame, QDialog, QScrollArea, QDateEdit,
-    QDialogButtonBox, QAbstractItemView,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QMessageBox,
+    QLineEdit,
+    QHeaderView,
+    QFrame,
+    QDialog,
+    QScrollArea,
+    QDateEdit,
+    QDialogButtonBox,
+    QAbstractItemView,
 )
 from PySide6.QtCore import QDate
 from PySide6.QtGui import QColor, QBrush
 
 from app.db.customers_repo import (
-    listar_clientes, crear_cliente, actualizar_cliente, cambiar_estado_cliente,
+    listar_clientes,
+    crear_cliente,
+    actualizar_cliente,
+    cambiar_estado_cliente,
 )
 from app.utils.formatters import fmt_fecha
 
@@ -64,7 +80,8 @@ class ClienteFormDialog(QDialog):
         self.customer = customer
         self.setWindowTitle("Editar Cliente" if customer else "Nuevo Cliente")
         self.setFixedWidth(380)
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QDialog { background: #0b1120; color: #e2e8f0; font-family: 'Segoe UI', Arial; }
             QLabel { color: #94a3b8; font-size: 12px; }
             QLineEdit {
@@ -80,7 +97,8 @@ class ClienteFormDialog(QDialog):
             QPushButton[flat="true"] {
                 background: #111c33; border: 1px solid #1e3a5f; color: #94a3b8;
             }
-        """)
+        """
+        )
 
         lay = QVBoxLayout(self)
         lay.setSpacing(12)
@@ -124,7 +142,8 @@ class ClienteFormDialog(QDialog):
         try:
             if self.customer:
                 actualizar_cliente(
-                    self.customer.id, nombre,
+                    self.customer.id,
+                    nombre,
                     self.txt_telefono.text().strip() or None,
                     self.txt_documento.text().strip() or None,
                 )
@@ -152,6 +171,7 @@ class HistorialClienteDialog(QDialog):
 
         try:
             from app.main import get_icon
+
             if get_icon():
                 self.setWindowIcon(get_icon())
         except Exception:
@@ -174,7 +194,9 @@ class HistorialClienteDialog(QDialog):
         info_row.addWidget(lbl_info, 1)
         lay.addLayout(info_row)
 
-        sep = QFrame(); sep.setFrameShape(QFrame.HLine); sep.setObjectName("separator")
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setObjectName("separator")
         lay.addWidget(sep)
 
         # ── Filtro por fecha ─────────────────────────────────
@@ -209,6 +231,11 @@ class HistorialClienteDialog(QDialog):
         filtro_row.addWidget(btn_todo)
 
         filtro_row.addStretch()
+
+        btn_factura = QPushButton("🧾  Factura")
+        btn_factura.setObjectName("btnSecondary")
+        btn_factura.clicked.connect(self._ver_factura_seleccionada)
+        filtro_row.addWidget(btn_factura)
 
         btn_pdf = QPushButton("🖨  Exportar PDF")
         btn_pdf.setObjectName("btnSuccess")
@@ -305,7 +332,7 @@ class HistorialClienteDialog(QDialog):
 
             # Resumen de productos
             prods = []
-            for d in (s.details or []):
+            for d in s.details or []:
                 nombre = d.product.nombre if d.product else f"#{d.product_id}"
                 qty = _qty(d.cantidad)
                 prods.append(f"{nombre} x{qty}")
@@ -321,7 +348,9 @@ class HistorialClienteDialog(QDialog):
             self.tbl.setItem(row, 2, cell(fmt_fecha(s.fecha)))
             self.tbl.setItem(row, 3, cell(prods_txt))
 
-            it_total = cell(_fmt_cop(float(s.total or 0)), Qt.AlignRight | Qt.AlignVCenter)
+            it_total = cell(
+                _fmt_cop(float(s.total or 0)), Qt.AlignRight | Qt.AlignVCenter
+            )
             if es_pendiente:
                 it_total.setForeground(QBrush(QColor("#fbbf24")))
             else:
@@ -339,20 +368,38 @@ class HistorialClienteDialog(QDialog):
 
         # KPI resumen
         n = len(ventas)
-        pendientes = sum(1 for s in ventas if getattr(s, "estado_pago", "PAGADO") == "PENDIENTE")
-        total_pendiente = sum(float(s.total or 0) for s in ventas if getattr(s, "estado_pago", "PAGADO") == "PENDIENTE")
+        pendientes = sum(
+            1 for s in ventas if getattr(s, "estado_pago", "PAGADO") == "PENDIENTE"
+        )
+        total_pendiente = sum(
+            float(s.total or 0)
+            for s in ventas
+            if getattr(s, "estado_pago", "PAGADO") == "PENDIENTE"
+        )
         resumen = (
-            f"  📋 {n} compra(s)   ·   "
-            f"💰 Total pagado: {_fmt_cop(total_acum)}"
+            f"  📋 {n} compra(s)   ·   " f"💰 Total pagado: {_fmt_cop(total_acum)}"
         )
         if pendientes:
-            resumen += f"   ·   ⏳ {pendientes} pendiente(s): {_fmt_cop(total_pendiente)}"
+            resumen += (
+                f"   ·   ⏳ {pendientes} pendiente(s): {_fmt_cop(total_pendiente)}"
+            )
         self.lbl_resumen.setText(resumen)
 
     def _exportar_pdf(self):
         desde = self.dt_desde.date().toPython()
         hasta = self.dt_hasta.date().toPython()
         exportar_historial_cliente_pdf(self, self.customer, self._ventas, desde, hasta)
+
+    def _ver_factura_seleccionada(self):
+        """Abre la factura compacta de la venta seleccionada en la tabla."""
+        row = self.tbl.currentRow()
+        if row < 0:
+            QMessageBox.warning(
+                self, "Factura", "Selecciona una compra de la tabla primero."
+            )
+            return
+        sale_id = int(self.tbl.item(row, 0).text())
+        mostrar_factura_compacta(self, sale_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -363,6 +410,7 @@ class CustomersWindow(QWidget):
         super().__init__()
         try:
             from app.main import get_icon
+
             if get_icon():
                 self.setWindowIcon(get_icon())
         except Exception:
@@ -383,7 +431,9 @@ class CustomersWindow(QWidget):
         lay.addWidget(lbl_title)
         lay.addWidget(lbl_sub)
 
-        sep = QFrame(); sep.setFrameShape(QFrame.HLine); sep.setObjectName("separator")
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setObjectName("separator")
         lay.addWidget(sep)
 
         # ── Barra de acciones ────────────────────────────────
@@ -396,10 +446,10 @@ class CustomersWindow(QWidget):
         bar.addWidget(self.txt_buscar, 1)
 
         for label, obj, slot in [
-            ("↺  Refrescar",   "btnSecondary",  self._cargar),
-            ("＋  Nuevo",       "btnPrimary",    self._nuevo),
-            ("✎  Editar",      "btnSecondary",  self._editar),
-            ("📋  Historial",  "btnSuccess",    self._ver_historial),
+            ("↺  Refrescar", "btnSecondary", self._cargar),
+            ("＋  Nuevo", "btnPrimary", self._nuevo),
+            ("✎  Editar", "btnSecondary", self._editar),
+            ("📋  Historial", "btnSuccess", self._ver_historial),
             ("⏺  Activar/Desact.", "btnWarning", self._toggle_estado),
         ]:
             btn = QPushButton(label)
@@ -451,6 +501,7 @@ class CustomersWindow(QWidget):
         from app.db.database import SessionLocal
         from app.db.models import Sale
         from sqlalchemy import func
+
         with SessionLocal() as db:
             conteo = dict(
                 db.query(Sale.customer_id, func.count(Sale.id))
@@ -495,9 +546,7 @@ class CustomersWindow(QWidget):
 
         self.tbl.setSortingEnabled(True)
         activos = sum(1 for c in clientes if getattr(c, "activo", True))
-        self.lbl_footer.setText(
-            f"{len(clientes)} cliente(s) · {activos} activo(s)"
-        )
+        self.lbl_footer.setText(f"{len(clientes)} cliente(s) · {activos} activo(s)")
 
     def _selected_customer(self):
         row = self.tbl.currentRow()
@@ -506,6 +555,7 @@ class CustomersWindow(QWidget):
             return None
         cid = int(self.tbl.item(row, 0).text())
         from app.db.customers_repo import obtener_cliente
+
         return obtener_cliente(cid)
 
     def _nuevo(self):
@@ -527,8 +577,7 @@ class CustomersWindow(QWidget):
             return
         accion = "desactivar" if c.activo else "activar"
         resp = QMessageBox.question(
-            self, "Confirmar",
-            f"¿{accion.capitalize()} al cliente '{c.nombre}'?"
+            self, "Confirmar", f"¿{accion.capitalize()} al cliente '{c.nombre}'?"
         )
         if resp == QMessageBox.Yes:
             try:
@@ -546,39 +595,113 @@ class CustomersWindow(QWidget):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  Factura compacta (ticket) de una venta individual
+# ─────────────────────────────────────────────────────────────────────────────
+def mostrar_factura_compacta(parent, sale_id: int) -> None:
+    """Muestra diálogo con factura compacta de la venta y permite exportar a PDF."""
+    try:
+        from reportlab.lib.pagesizes import A4
+    except ImportError:
+        QMessageBox.critical(
+            parent,
+            "Dependencia faltante",
+            "Instala reportlab:\n\n  pip install reportlab",
+        )
+        return
+
+    from app.db.sales_repo import obtener_venta_con_detalle
+
+    sale = obtener_venta_con_detalle(sale_id)
+    if not sale:
+        QMessageBox.information(parent, "Factura", "Venta no encontrada.")
+        return
+
+    from app.ui.sale_receipt import exportar_recibo_pdf
+
+    exportar_recibo_pdf(parent, sale_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  Exportar historial a PDF
 # ─────────────────────────────────────────────────────────────────────────────
-def exportar_historial_cliente_pdf(parent, customer, ventas: list, desde: date, hasta: date) -> None:
+def exportar_historial_cliente_pdf(
+    parent, customer, ventas: list, desde: date, hasta: date
+) -> None:
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import mm
         from reportlab.lib import colors
         from reportlab.pdfgen import canvas as rl_canvas
     except ImportError:
-        QMessageBox.critical(parent, "Dependencia faltante",
-                             "Instala reportlab:\n\n  pip install reportlab")
+        QMessageBox.critical(
+            parent,
+            "Dependencia faltante",
+            "Instala reportlab:\n\n  pip install reportlab",
+        )
         return
 
     if not ventas:
-        QMessageBox.information(parent, "Sin datos",
-                                "No hay compras en el período seleccionado.")
+        QMessageBox.information(
+            parent, "Sin datos", "No hay compras en el período seleccionado."
+        )
         return
 
+    # ── Elegir color o blanco y negro ────────────────────────
+    from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+
+    dlg_modo = QDialog(parent)
+    dlg_modo.setWindowTitle("Estilo del PDF")
+    dlg_modo.setFixedWidth(320)
+    dlg_modo.setStyleSheet("background:#0b1120; color:#e2e8f0; font-family:'Segoe UI';")
+    lay_m = QVBoxLayout(dlg_modo)
+    lay_m.setSpacing(12)
+    lay_m.setContentsMargins(20, 20, 20, 20)
+    lbl_m = QLabel("¿Cómo deseas imprimir el historial?")
+    lbl_m.setStyleSheet("font-size:13px; font-weight:600;")
+    lay_m.addWidget(lbl_m)
+    row_m = QHBoxLayout()
+    btn_color = QPushButton("🎨  A color")
+    btn_color.setStyleSheet(
+        "background:#1e3a5f; border:1px solid #3b82f6; border-radius:8px; padding:10px; font-weight:700; color:#93c5fd;"
+    )
+    btn_bw = QPushButton("🖨  Blanco y negro")
+    btn_bw.setStyleSheet(
+        "background:#1a1a1a; border:1px solid #475569; border-radius:8px; padding:10px; font-weight:700; color:#e2e8f0;"
+    )
+    row_m.addWidget(btn_color)
+    row_m.addWidget(btn_bw)
+    lay_m.addLayout(row_m)
+    _modo = ["color"]
+    btn_color.clicked.connect(
+        lambda: (_modo.__setitem__(0, "color"), dlg_modo.accept())
+    )
+    btn_bw.clicked.connect(lambda: (_modo.__setitem__(0, "bw"), dlg_modo.accept()))
+    if dlg_modo.exec() != QDialog.Accepted:
+        return
+    modo_bw = _modo[0] == "bw"
+
     from PySide6.QtWidgets import QFileDialog
+
     nombre_slug = customer.nombre.replace(" ", "_")[:20]
     default = f"historial_{nombre_slug}_{desde.strftime('%Y%m%d')}_al_{hasta.strftime('%Y%m%d')}.pdf"
-    path, _ = QFileDialog.getSaveFileName(parent, "Guardar historial PDF", default, "PDF (*.pdf)")
+    path, _ = QFileDialog.getSaveFileName(
+        parent, "Guardar historial PDF", default, "PDF (*.pdf)"
+    )
     if not path:
         return
 
     try:
-        _build_historial_pdf(path, customer, ventas, desde, hasta)
-        QMessageBox.information(parent, "✅ Exportado", f"Historial guardado en:\n{path}")
+        _build_historial_pdf(path, customer, ventas, desde, hasta, modo_bw=modo_bw)
+        QMessageBox.information(
+            parent, "✅ Exportado", f"Historial guardado en:\n{path}"
+        )
     except Exception as e:
         QMessageBox.critical(parent, "Error al generar PDF", str(e))
 
 
-def _build_historial_pdf(path: str, customer, ventas: list, desde: date, hasta: date) -> None:
+def _build_historial_pdf(
+    path: str, customer, ventas: list, desde: date, hasta: date, modo_bw: bool = False
+) -> None:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -591,21 +714,37 @@ def _build_historial_pdf(path: str, customer, ventas: list, desde: date, hasta: 
     empresa_tel = cfg.get("empresa_telefono", "")
     empresa_dir = cfg.get("empresa_direccion", "")
 
-    PAGE_W, PAGE_H = A4  # 210 x 297 mm
+    PAGE_W, PAGE_H = A4
     c = rl_canvas.Canvas(path, pagesize=A4)
     W, H = PAGE_W, PAGE_H
 
-    # Paleta dark
-    COL_BG        = colors.HexColor("#0b1120")
-    COL_HEADER    = colors.HexColor("#0d1829")
-    COL_ACCENT    = colors.HexColor("#2563eb")
-    COL_TEXT      = colors.HexColor("#e2e8f0")
-    COL_MUTED     = colors.HexColor("#475569")
-    COL_GREEN     = colors.HexColor("#4ade80")
-    COL_YELLOW    = colors.HexColor("#fbbf24")
-    COL_ROW_ALT   = colors.HexColor("#0f1a2e")
-    COL_ROW_NORM  = colors.HexColor("#0b1120")
-    COL_LINE      = colors.HexColor("#1e293b")
+    # Paleta según modo
+    if modo_bw:
+        COL_BG = colors.white
+        COL_HEADER = colors.HexColor("#f0f0f0")
+        COL_ACCENT = colors.HexColor("#333333")
+        COL_TEXT = colors.black
+        COL_MUTED = colors.HexColor("#555555")
+        COL_GREEN = colors.black
+        COL_YELLOW = colors.HexColor("#333333")
+        COL_ROW_ALT = colors.HexColor("#eeeeee")
+        COL_ROW_NORM = colors.white
+        COL_LINE = colors.HexColor("#cccccc")
+        COL_CAB_BG = colors.HexColor("#dddddd")
+        COL_CAB_TXT = colors.HexColor("#333333")
+    else:
+        COL_BG = colors.HexColor("#0b1120")
+        COL_HEADER = colors.HexColor("#0d1829")
+        COL_ACCENT = colors.HexColor("#2563eb")
+        COL_TEXT = colors.HexColor("#e2e8f0")
+        COL_MUTED = colors.HexColor("#475569")
+        COL_GREEN = colors.HexColor("#4ade80")
+        COL_YELLOW = colors.HexColor("#fbbf24")
+        COL_ROW_ALT = colors.HexColor("#0f1a2e")
+        COL_ROW_NORM = colors.HexColor("#0b1120")
+        COL_LINE = colors.HexColor("#1e293b")
+        COL_CAB_BG = colors.HexColor("#1e3a5f")
+        COL_CAB_TXT = colors.HexColor("#94a3b8")
 
     MARGIN = 14 * mm
     COL_W = W - 2 * MARGIN
@@ -636,9 +775,15 @@ def _build_historial_pdf(path: str, customer, ventas: list, desde: date, hasta: 
         if logo_path.exists():
             try:
                 logo_h, logo_w = 12 * mm, 30 * mm
-                c.drawImage(str(logo_path), MARGIN, H - 14 * mm,
-                            width=logo_w, height=logo_h,
-                            preserveAspectRatio=True, mask="auto")
+                c.drawImage(
+                    str(logo_path),
+                    MARGIN,
+                    H - 14 * mm,
+                    width=logo_w,
+                    height=logo_h,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
             except Exception:
                 pass
 
@@ -679,7 +824,9 @@ def _build_historial_pdf(path: str, customer, ventas: list, desde: date, hasta: 
         # Período
         c.setFillColor(COL_MUTED)
         c.setFont("Helvetica", 8)
-        periodo = f"Período: {desde.strftime('%d/%m/%Y')} — {hasta.strftime('%d/%m/%Y')}"
+        periodo = (
+            f"Período: {desde.strftime('%d/%m/%Y')} — {hasta.strftime('%d/%m/%Y')}"
+        )
         c.drawString(MARGIN, y, periodo)
         c.drawRightString(W - MARGIN, y, f"Página {page_num[0]}")
         y -= 3 * mm
@@ -689,10 +836,16 @@ def _build_historial_pdf(path: str, customer, ventas: list, desde: date, hasta: 
         return y
 
     # ── Calcular totales ────────────────────────────────────────────────────
-    total_pagado = sum(float(s.total or 0) for s in ventas
-                       if getattr(s, "estado_pago", "PAGADO") == "PAGADO")
-    total_pendiente = sum(float(s.total or 0) for s in ventas
-                          if getattr(s, "estado_pago", "PAGADO") == "PENDIENTE")
+    total_pagado = sum(
+        float(s.total or 0)
+        for s in ventas
+        if getattr(s, "estado_pago", "PAGADO") == "PAGADO"
+    )
+    total_pendiente = sum(
+        float(s.total or 0)
+        for s in ventas
+        if getattr(s, "estado_pago", "PAGADO") == "PENDIENTE"
+    )
 
     # ── Primera página ──────────────────────────────────────────────────────
     y = draw_header(H)
@@ -723,24 +876,24 @@ def _build_historial_pdf(path: str, customer, ventas: list, desde: date, hasta: 
 
     # ── Encabezado tabla ────────────────────────────────────────────────────
     COL_POSITIONS = {
-        "factura":   (MARGIN,                  28 * mm),
-        "fecha":     (MARGIN + 30 * mm,        30 * mm),
-        "productos": (MARGIN + 62 * mm,        68 * mm),
-        "total":     (MARGIN + 132 * mm,       28 * mm),
-        "estado":    (MARGIN + 162 * mm,       22 * mm),
+        "factura": (MARGIN, 28 * mm),
+        "fecha": (MARGIN + 30 * mm, 30 * mm),
+        "productos": (MARGIN + 62 * mm, 68 * mm),
+        "total": (MARGIN + 132 * mm, 28 * mm),
+        "estado": (MARGIN + 162 * mm, 22 * mm),
     }
 
     def draw_table_header(y):
-        c.setFillColor(colors.HexColor("#1e3a5f"))
+        c.setFillColor(COL_CAB_BG)
         c.rect(MARGIN, y - 6 * mm, COL_W, 7 * mm, fill=1, stroke=0)
-        c.setFillColor(colors.HexColor("#94a3b8"))
+        c.setFillColor(COL_CAB_TXT)
         c.setFont("Helvetica-Bold", 6.5)
         headers = [
-            (COL_POSITIONS["factura"][0],   "N° FACTURA"),
-            (COL_POSITIONS["fecha"][0],     "FECHA"),
+            (COL_POSITIONS["factura"][0], "N° FACTURA"),
+            (COL_POSITIONS["fecha"][0], "FECHA"),
             (COL_POSITIONS["productos"][0], "PRODUCTOS"),
-            (COL_POSITIONS["total"][0],     "TOTAL"),
-            (COL_POSITIONS["estado"][0],    "ESTADO"),
+            (COL_POSITIONS["total"][0], "TOTAL"),
+            (COL_POSITIONS["estado"][0], "ESTADO"),
         ]
         for xpos, txt in headers:
             c.drawString(xpos + 1 * mm, y - 4 * mm, txt)
@@ -749,24 +902,54 @@ def _build_historial_pdf(path: str, customer, ventas: list, desde: date, hasta: 
     y = draw_table_header(y)
 
     # ── Filas de ventas ──────────────────────────────────────────────────────
+    PROD_COL_X = COL_POSITIONS["productos"][0] + 1 * mm
+    PROD_COL_W = COL_POSITIONS["productos"][1] - 2 * mm  # ancho útil productos
+    LINE_H = 4.2 * mm  # altura por línea de texto
+    PAD_V = 2.0 * mm  # padding vertical por fila
+
+    def wrap_productos(items: list[str], max_w: float, font_size: float) -> list[str]:
+        """Parte la lista de productos en líneas que caben en max_w."""
+        c.setFont("Helvetica", font_size)
+        lines, current = [], ""
+        for item in items:
+            probe = (current + " · " + item) if current else item
+            if c.stringWidth(probe, "Helvetica", font_size) <= max_w:
+                current = probe
+            else:
+                if current:
+                    lines.append(current)
+                # Si el item solo ya es más ancho, lo cortamos con …
+                while c.stringWidth(item, "Helvetica", font_size) > max_w:
+                    # recortar carácter a carácter
+                    cut = item
+                    while (
+                        cut and c.stringWidth(cut + "…", "Helvetica", font_size) > max_w
+                    ):
+                        cut = cut[:-1]
+                    lines.append(cut + "…")
+                    item = ""
+                    break
+                current = item
+        if current:
+            lines.append(current)
+        return lines or ["—"]
+
     for idx, s in enumerate(ventas):
         es_pendiente = getattr(s, "estado_pago", "PAGADO") == "PENDIENTE"
 
-        # Resumen de productos (una línea)
+        # Construir lista de ítems
         prods = []
-        for d in (s.details or []):
+        for d in s.details or []:
             nombre = d.product.nombre if d.product else f"#{d.product_id}"
             qty = _qty(d.cantidad)
-            prods.append(f"{nombre}({qty})")
-        prods_txt = " · ".join(prods) if prods else "—"
-        # Truncar si es muy largo
-        if len(prods_txt) > 65:
-            prods_txt = prods_txt[:62] + "…"
+            prods.append(f"{nombre} ({qty})")
+        prod_lines = wrap_productos(prods, PROD_COL_W, 6.5)
 
-        row_h = 7 * mm
+        # Altura dinámica según cantidad de líneas
+        row_h = max(7 * mm, len(prod_lines) * LINE_H + PAD_V * 2)
 
         # Necesita nueva página?
-        if y < 25 * mm:
+        if y - row_h < 25 * mm:
             c.showPage()
             y = draw_header(H)
             y = draw_table_header(y)
@@ -774,41 +957,55 @@ def _build_historial_pdf(path: str, customer, ventas: list, desde: date, hasta: 
         # Fondo fila alterna
         bg = COL_ROW_ALT if idx % 2 == 0 else COL_ROW_NORM
         c.setFillColor(bg)
-        c.rect(MARGIN, y - row_h + 1.5 * mm, COL_W, row_h, fill=1, stroke=0)
+        c.rect(MARGIN, y - row_h, COL_W, row_h, fill=1, stroke=0)
 
-        ty = y - 4.5 * mm  # baseline texto
+        # Baseline primera línea (desde arriba con padding)
+        ty = y - PAD_V - LINE_H * 0.75
 
-        # N° Factura
+        # N° Factura (centrado verticalmente)
+        mid_y = y - row_h / 2 - 1.5 * mm
         c.setFillColor(COL_TEXT)
         c.setFont("Helvetica-Bold", 7.5)
-        c.drawString(COL_POSITIONS["factura"][0] + 1 * mm, ty, s.numero_factura or f"#{s.id}")
+        c.drawString(
+            COL_POSITIONS["factura"][0] + 1 * mm, mid_y, s.numero_factura or f"#{s.id}"
+        )
 
-        # Fecha
+        # Fecha (centrada verticalmente)
         c.setFillColor(COL_MUTED)
         c.setFont("Helvetica", 7)
         try:
             fecha_txt = s.fecha.strftime("%d/%m/%Y %H:%M")
         except Exception:
             fecha_txt = str(s.fecha)
-        c.drawString(COL_POSITIONS["fecha"][0] + 1 * mm, ty, fecha_txt)
+        c.drawString(COL_POSITIONS["fecha"][0] + 1 * mm, mid_y, fecha_txt)
 
-        # Productos
+        # Productos — multi-línea
         c.setFillColor(COL_TEXT)
         c.setFont("Helvetica", 6.5)
-        c.drawString(COL_POSITIONS["productos"][0] + 1 * mm, ty, prods_txt)
+        for li, line_txt in enumerate(prod_lines):
+            c.drawString(PROD_COL_X, ty - li * LINE_H, line_txt)
 
-        # Total
+        # Total (centrado verticalmente)
         col_total = COL_YELLOW if es_pendiente else COL_GREEN
         c.setFillColor(col_total)
         c.setFont("Helvetica-Bold", 8)
         total_txt = _fmt_cop(float(s.total or 0))
-        c.drawRightString(COL_POSITIONS["total"][0] + COL_POSITIONS["total"][1] - 1 * mm, ty, total_txt)
+        c.drawRightString(
+            COL_POSITIONS["total"][0] + COL_POSITIONS["total"][1] - 1 * mm,
+            mid_y,
+            total_txt,
+        )
 
-        # Estado
+        # Estado (centrado verticalmente)
         estado_txt = "PENDIENTE" if es_pendiente else "PAGADO"
         c.setFillColor(COL_YELLOW if es_pendiente else COL_GREEN)
         c.setFont("Helvetica-Bold", 6.5)
-        c.drawString(COL_POSITIONS["estado"][0] + 1 * mm, ty, estado_txt)
+        c.drawString(COL_POSITIONS["estado"][0] + 1 * mm, mid_y, estado_txt)
+
+        # Línea separadora fina entre filas
+        c.setStrokeColor(COL_LINE)
+        c.setLineWidth(0.3)
+        c.line(MARGIN, y - row_h, W - MARGIN, y - row_h)
 
         y -= row_h
 
@@ -834,7 +1031,11 @@ def _build_historial_pdf(path: str, customer, ventas: list, desde: date, hasta: 
     y -= 10 * mm
     c.setFillColor(COL_MUTED)
     c.setFont("Helvetica", 6)
-    c.drawCentredString(W / 2, y, f"Generado por {empresa} — {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    c.drawCentredString(
+        W / 2,
+        y,
+        f"Generado por {empresa} — {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+    )
 
     c.save()
 
@@ -896,7 +1097,9 @@ QScrollBar::handle:vertical { background: #1e3a5f; border-radius: 3px; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
 """
 
-_STYLES_DIALOG = _STYLES_MAIN + """
+_STYLES_DIALOG = (
+    _STYLES_MAIN
+    + """
 QDialog { background: #0b1120; }
 #kpiLabel { font-size: 12px; color: #64748b; padding: 4px 0; }
 #dateEdit {
@@ -917,3 +1120,4 @@ QDialog { background: #0b1120; }
 }
 #innerTable::item { padding: 4px 10px; border: none; }
 """
+)
