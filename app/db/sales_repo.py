@@ -7,14 +7,7 @@ from sqlalchemy.orm import joinedload
 from app.db.database import SessionLocal
 from app.db.models import Sale, SaleDetail, Product, Customer
 from app.db.cash_repo import registrar_movimiento_en_db
-
-
-def _fmt_cop(value: float) -> str:
-    try:
-        n = int(round(float(value)))
-    except Exception:
-        n = 0
-    return "$" + f"{n:,}".replace(",", ".")
+from app.utils.formatters import fmt_cop as _fmt_cop
 
 
 # ----------------------------
@@ -184,7 +177,7 @@ def crear_venta(
                 registrar_movimiento_en_db(
                     db,
                     tipo="INGRESO",
-                    concepto=f"Venta {sale.numero_factura or f'#{sale.id}'}",
+                    concepto=f"Venta {sale.numero_factura}",
                     monto=float(sale.total),
                     referencia=f"Venta #{sale.id}",
                     observacion=observacion,

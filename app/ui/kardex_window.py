@@ -23,31 +23,7 @@ from PySide6.QtWidgets import (
 
 from app.db.products_repo import listar_productos
 from app.db.kardex_repo import obtener_kardex
-from app.utils.formatters import fmt_fecha
-
-
-def _fmt_qty(x: float) -> str:
-    try:
-        v = float(x or 0.0)
-        s = f"{v:.3f}".rstrip("0").rstrip(".")
-        return s.replace(".", ",")
-    except Exception:
-        return "0"
-
-
-def _fmt_cop(value: float) -> str:
-    """Formato COP: sin decimales, sin signo negativo, separador de miles con punto."""
-    try:
-        n = int(round(abs(float(value or 0.0))))
-        s = ""
-        digits = str(n)
-        for i, ch in enumerate(reversed(digits)):
-            if i > 0 and i % 3 == 0:
-                s = "." + s
-            s = ch + s
-        return "$" + s
-    except Exception:
-        return "$0"
+from app.utils.formatters import fmt_fecha, fmt_cop as _fmt_cop, fmt_qty as _fmt_qty
 
 
 def _item(

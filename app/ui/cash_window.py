@@ -32,15 +32,7 @@ from app.db.cash_repo import (
     contar_movimientos,
 )
 from app.ui.cash_form import CashForm
-from app.utils.formatters import fmt_fecha
-
-
-def _fmt_cop(value: float) -> str:
-    try:
-        s = "${:,.2f}".format(float(value or 0.0))
-        return s.replace(",", "X").replace(".", ",").replace("X", ".")
-    except Exception:
-        return "$0,00"
+from app.utils.formatters import fmt_fecha, fmt_cop as _fmt_cop
 
 
 class _FixedTable(QTableWidget):

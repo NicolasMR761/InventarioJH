@@ -40,35 +40,12 @@ from app.db.customers_repo import (
     actualizar_cliente,
     cambiar_estado_cliente,
 )
-from app.utils.formatters import fmt_fecha
+from app.utils.formatters import fmt_fecha, fmt_cop as _fmt_cop, fmt_qty as _qty
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Helpers
 # ─────────────────────────────────────────────────────────────────────────────
-def _fmt_cop(value) -> str:
-    try:
-        n = int(round(float(value or 0)))
-        s = ""
-        neg = n < 0
-        n = abs(n)
-        digits = str(n)
-        for i, ch in enumerate(reversed(digits)):
-            if i > 0 and i % 3 == 0:
-                s = "." + s
-            s = ch + s
-        return ("$-" if neg else "$") + s
-    except Exception:
-        return "$0"
-
-
-def _qty(value) -> str:
-    try:
-        v = float(value or 0)
-        s = f"{v:.3f}".rstrip("0").rstrip(".")
-        return s.replace(".", ",")
-    except Exception:
-        return "0"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -599,6 +576,23 @@ class CustomersWindow(QWidget):
 # ─────────────────────────────────────────────────────────────────────────────
 def mostrar_factura_compacta(parent, sale_id: int) -> None:
     """Muestra diálogo con factura compacta de la venta y permite exportar a PDF."""
+    try:
+        from reportlab.lib.pagesizes import A4
+    except ImportError:
+        QMessageBox.critical(
+            parent,
+            "Dependencia faltante",
+            "Instala reportlab:\n\n  pip install reportlab",
+        )
+        return
+
+    from app.db.sales_repo import obtener_venta_con_detalle
+
+    sale = obtener_venta_con_detalle(sale_id)
+    if not sale:
+        QMessageBox.information(parent, "Factura", "Venta no encontrada.")
+        return
+
     from app.ui.sale_receipt import exportar_recibo_pdf
 
     exportar_recibo_pdf(parent, sale_id)

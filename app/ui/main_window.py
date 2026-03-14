@@ -24,18 +24,8 @@ from app.db.database import init_db, get_app_data_dir
 from PySide6.QtGui import QPainter, QPen, QLinearGradient, QColor as QColorG
 from PySide6.QtCore import QRect, QPoint
 from app.utils.backup import crear_backup
+from app.utils.formatters import fmt_cop as _fmt_cop
 from app.version import APP_VERSION
-
-
-# ─────────────────────────────────────────────
-#  Helpers de formato
-# ─────────────────────────────────────────────
-def _fmt_cop(value) -> str:
-    try:
-        n = int(round(float(value or 0)))
-        return "$" + f"{n:,}".replace(",", ".")
-    except Exception:
-        return "$0"
 
 
 # ─────────────────────────────────────────────

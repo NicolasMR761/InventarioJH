@@ -3,22 +3,7 @@ from __future__ import annotations
 from app.db.database import SessionLocal
 from app.db.models import Entry, EntryDetail, Product, Supplier
 from app.db.cash_repo import registrar_movimiento_en_db
-
-
-def _fmt_cop_simple(value: float) -> str:
-    try:
-        s = "${:,.0f}".format(float(value or 0.0))
-        return s.replace(",", "X").replace(".", ",").replace("X", ".")
-    except Exception:
-        return "$0"
-
-
-def _fmt_qty(value: float) -> str:
-    try:
-        v = float(value)
-    except Exception:
-        return "0"
-    return f"{int(v)}" if v.is_integer() else f"{v:g}"
+from app.utils.formatters import fmt_cop as _fmt_cop_simple, fmt_qty as _fmt_qty
 
 
 def _calcular_costo_promedio(
