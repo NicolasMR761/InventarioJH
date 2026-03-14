@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QComboBox,
 )
 from PySide6.QtGui import QFont
+from app.version import APP_VERSION
 
 
 # ── Preguntas de seguridad predefinidas ──────────────────────
@@ -143,7 +144,7 @@ class LoginWindow(QWidget):
 
         lay.addStretch()
 
-        lbl_version = QLabel("v1.8.2")
+        lbl_version = QLabel(APP_VERSION)
         lbl_version.setObjectName("versionLabel")
         lbl_version.setAlignment(Qt.AlignCenter)
         lay.addWidget(lbl_version)

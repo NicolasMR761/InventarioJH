@@ -5,6 +5,7 @@ Formulario de creación y edición de clientes.
 Extraído de customers_window.py para mantener archivos manejables.
 ──────────────────────────────────────────────────────────────────────────────
 """
+
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
@@ -26,7 +27,8 @@ class ClienteFormDialog(QDialog):
         self.customer = customer
         self.setWindowTitle("Editar Cliente" if customer else "Nuevo Cliente")
         self.setFixedWidth(380)
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QDialog { background: #0b1120; color: #e2e8f0; font-family: 'Segoe UI', Arial; }
             QLabel { color: #94a3b8; font-size: 12px; }
             QLineEdit {
@@ -42,7 +44,8 @@ class ClienteFormDialog(QDialog):
             QPushButton[flat="true"] {
                 background: #111c33; border: 1px solid #1e3a5f; color: #94a3b8;
             }
-        """)
+        """
+        )
 
         lay = QVBoxLayout(self)
         lay.setSpacing(12)
@@ -86,7 +89,8 @@ class ClienteFormDialog(QDialog):
         try:
             if self.customer:
                 actualizar_cliente(
-                    self.customer.id, nombre,
+                    self.customer.id,
+                    nombre,
                     self.txt_telefono.text().strip() or None,
                     self.txt_documento.text().strip() or None,
                 )

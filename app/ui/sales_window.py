@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QComboBox,
+    QSpinBox,
+    QDoubleSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QMessageBox,
@@ -18,8 +20,9 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QFrame,
     QScrollArea,
+    QAbstractScrollArea,
 )
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtGui import QColor, QBrush, QWheelEvent
 
 from app.db.products_repo import listar_productos
 from app.db.customers_repo import listar_clientes, crear_cliente
@@ -31,8 +34,61 @@ from app.db.sales_repo import (
     anular_venta,
     registrar_pago_pendiente,
 )
-from app.utils.formatters import fmt_fecha, fmt_qty
-from app.ui.widgets import CommaDoubleSpinBox, CopSpinBox, _FixedTable
+from app.utils.formatters import fmt_fecha
+from app.ui.widgets import CommaDoubleSpinBox
+
+
+class CopSpinBox(QSpinBox):
+    """
+    SpinBox para precios en COP:
+    - Muestra separador de miles con punto  (ej: $6.000)
+    - Sube/baja de 50 en 50 con las flechas
+    - Acepta entrada con o sin puntos
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimum(0)
+        self.setMaximum(99_999_999)
+        self.setSingleStep(50)
+        self.setPrefix("$")
+
+    def textFromValue(self, value: int) -> str:
+        s = ""
+        digits = str(abs(value))
+        for i, ch in enumerate(reversed(digits)):
+            if i > 0 and i % 3 == 0:
+                s = "." + s
+            s = ch + s
+        return s
+
+    def valueFromText(self, text: str) -> int:
+        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
+        try:
+            return int(clean)
+        except ValueError:
+            return 0
+
+    def validate(self, text: str, pos: int):
+        from PySide6.QtGui import QValidator
+
+        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
+        if clean == "" or clean.isdigit():
+            return (QValidator.Acceptable, text, pos)
+        return (QValidator.Invalid, text, pos)
+
+
+class _FixedTable(QTableWidget):
+    """
+    Tabla con altura fija y scroll interno propio.
+    La rueda del mouse scrollea DENTRO de la tabla.
+    NO propaga el evento al QScrollArea padre, evitando
+    que la página entera se mueva al scrollear sobre la tabla.
+    """
+
+    def wheelEvent(self, event: QWheelEvent):
+        super().wheelEvent(event)
+        event.accept()
 
 
 class SalesWindow(QWidget):
@@ -140,6 +196,9 @@ class SalesWindow(QWidget):
         self.txt_factura.setObjectName("inputField")
         self.txt_factura.setPlaceholderText("Nro. factura…")
         self.txt_factura.setFixedWidth(120)
+        self.txt_factura.textEdited.connect(
+            lambda t: self.txt_factura.setText(t.upper())
+        )
         row2.addWidget(self.txt_factura)
 
         lbl_cl = QLabel("Cliente:")
@@ -510,7 +569,7 @@ class SalesWindow(QWidget):
             self.tbl_hist.setItem(
                 row, 0, cell(str(s.id), Qt.AlignCenter | Qt.AlignVCenter)
             )
-            self.tbl_hist.setItem(row, 1, cell(s.numero_factura or "—"))
+            self.tbl_hist.setItem(row, 1, cell((s.numero_factura or "—").upper()))
             self.tbl_hist.setItem(row, 2, cell(fmt_fecha(s.fecha)))
             self.tbl_hist.setItem(row, 3, cell(cliente_nombre))
 
@@ -662,7 +721,7 @@ class SalesWindow(QWidget):
             cliente_nombre = s.customer.nombre if getattr(s, "customer", None) else "—"
             self.tbl_pendientes.setItem(row, 0, QTableWidgetItem(str(s.id)))
             self.tbl_pendientes.setItem(
-                row, 1, QTableWidgetItem(s.numero_factura or "—")
+                row, 1, QTableWidgetItem((s.numero_factura or "—").upper())
             )
             self.tbl_pendientes.setItem(row, 2, QTableWidgetItem(fmt_fecha(s.fecha)))
             self.tbl_pendientes.setItem(row, 3, QTableWidgetItem(cliente_nombre))
@@ -795,7 +854,7 @@ class SalesWindow(QWidget):
         if not self.items:
             QMessageBox.warning(self, "Ventas", "Agrega al menos 1 producto.")
             return
-        numero_factura = self.txt_factura.text().strip()
+        numero_factura = self.txt_factura.text().strip().upper()
         if not numero_factura:
             QMessageBox.warning(
                 self, "Obligatorio", "El número de factura es obligatorio."
@@ -933,7 +992,7 @@ class SalesWindow(QWidget):
         cliente_nombre = (
             sale.customer.nombre if getattr(sale, "customer", None) else "—"
         )
-        factura_txt = sale.numero_factura or f"#{sale.id}"
+        factura_txt = (sale.numero_factura or f"#{sale.id}").upper()
 
         items_html = ""
         for d in sale.details:

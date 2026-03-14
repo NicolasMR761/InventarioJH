@@ -5,13 +5,19 @@ Exportación a PDF del historial de compras de un cliente.
 Extraído de customers_window.py para mantener archivos manejables.
 ──────────────────────────────────────────────────────────────────────────────
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QFileDialog, QMessageBox,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLabel,
+    QFileDialog,
+    QMessageBox,
 )
 
 from app.utils.formatters import fmt_cop as _fmt_cop, fmt_qty as _qty
@@ -20,6 +26,7 @@ from app.utils.formatters import fmt_cop as _fmt_cop, fmt_qty as _qty
 def mostrar_factura_compacta(parent, sale_id: int) -> None:
     """Muestra diálogo con factura compacta de la venta y permite exportar a PDF."""
     from app.ui.sale_receipt import exportar_recibo_pdf
+
     exportar_recibo_pdf(parent, sale_id)
 
 
@@ -30,7 +37,8 @@ def exportar_historial_cliente_pdf(
         from reportlab.lib.pagesizes import A4  # noqa: F401
     except ImportError:
         QMessageBox.critical(
-            parent, "Dependencia faltante",
+            parent,
+            "Dependencia faltante",
             "Instala reportlab:\n\n  pip install reportlab",
         )
         return
@@ -67,7 +75,9 @@ def exportar_historial_cliente_pdf(
     row_m.addWidget(btn_bw)
     lay_m.addLayout(row_m)
     _modo = ["color"]
-    btn_color.clicked.connect(lambda: (_modo.__setitem__(0, "color"), dlg_modo.accept()))
+    btn_color.clicked.connect(
+        lambda: (_modo.__setitem__(0, "color"), dlg_modo.accept())
+    )
     btn_bw.clicked.connect(lambda: (_modo.__setitem__(0, "bw"), dlg_modo.accept()))
     if dlg_modo.exec() != QDialog.Accepted:
         return
@@ -86,7 +96,9 @@ def exportar_historial_cliente_pdf(
 
     try:
         _build_historial_pdf(path, customer, ventas, desde, hasta, modo_bw=modo_bw)
-        QMessageBox.information(parent, "✅ Exportado", f"Historial guardado en:\n{path}")
+        QMessageBox.information(
+            parent, "✅ Exportado", f"Historial guardado en:\n{path}"
+        )
     except Exception as e:
         QMessageBox.critical(parent, "Error al generar PDF", str(e))
 
@@ -110,31 +122,31 @@ def _build_historial_pdf(
     W, H = PAGE_W, PAGE_H
 
     if modo_bw:
-        COL_BG       = colors.white
-        COL_HEADER   = colors.HexColor("#f0f0f0")
-        COL_ACCENT   = colors.HexColor("#333333")
-        COL_TEXT     = colors.black
-        COL_MUTED    = colors.HexColor("#555555")
-        COL_GREEN    = colors.black
-        COL_YELLOW   = colors.HexColor("#333333")
-        COL_ROW_ALT  = colors.HexColor("#eeeeee")
+        COL_BG = colors.white
+        COL_HEADER = colors.HexColor("#f0f0f0")
+        COL_ACCENT = colors.HexColor("#333333")
+        COL_TEXT = colors.black
+        COL_MUTED = colors.HexColor("#555555")
+        COL_GREEN = colors.black
+        COL_YELLOW = colors.HexColor("#333333")
+        COL_ROW_ALT = colors.HexColor("#eeeeee")
         COL_ROW_NORM = colors.white
-        COL_LINE     = colors.HexColor("#cccccc")
-        COL_CAB_BG   = colors.HexColor("#dddddd")
-        COL_CAB_TXT  = colors.HexColor("#333333")
+        COL_LINE = colors.HexColor("#cccccc")
+        COL_CAB_BG = colors.HexColor("#dddddd")
+        COL_CAB_TXT = colors.HexColor("#333333")
     else:
-        COL_BG       = colors.HexColor("#0b1120")
-        COL_HEADER   = colors.HexColor("#0d1829")
-        COL_ACCENT   = colors.HexColor("#2563eb")
-        COL_TEXT     = colors.HexColor("#e2e8f0")
-        COL_MUTED    = colors.HexColor("#475569")
-        COL_GREEN    = colors.HexColor("#4ade80")
-        COL_YELLOW   = colors.HexColor("#fbbf24")
-        COL_ROW_ALT  = colors.HexColor("#0f1a2e")
+        COL_BG = colors.HexColor("#0b1120")
+        COL_HEADER = colors.HexColor("#0d1829")
+        COL_ACCENT = colors.HexColor("#2563eb")
+        COL_TEXT = colors.HexColor("#e2e8f0")
+        COL_MUTED = colors.HexColor("#475569")
+        COL_GREEN = colors.HexColor("#4ade80")
+        COL_YELLOW = colors.HexColor("#fbbf24")
+        COL_ROW_ALT = colors.HexColor("#0f1a2e")
         COL_ROW_NORM = colors.HexColor("#0b1120")
-        COL_LINE     = colors.HexColor("#1e293b")
-        COL_CAB_BG   = colors.HexColor("#1e3a5f")
-        COL_CAB_TXT  = colors.HexColor("#94a3b8")
+        COL_LINE = colors.HexColor("#1e293b")
+        COL_CAB_BG = colors.HexColor("#1e3a5f")
+        COL_CAB_TXT = colors.HexColor("#94a3b8")
 
     MARGIN = 14 * mm
     COL_W = W - 2 * MARGIN
@@ -162,9 +174,13 @@ def _build_historial_pdf(
         if logo_path.exists():
             try:
                 c.drawImage(
-                    str(logo_path), MARGIN, H - 14 * mm,
-                    width=30 * mm, height=12 * mm,
-                    preserveAspectRatio=True, mask="auto",
+                    str(logo_path),
+                    MARGIN,
+                    H - 14 * mm,
+                    width=30 * mm,
+                    height=12 * mm,
+                    preserveAspectRatio=True,
+                    mask="auto",
                 )
             except Exception:
                 pass
@@ -203,7 +219,9 @@ def _build_historial_pdf(
 
         c.setFillColor(COL_MUTED)
         c.setFont("Helvetica", 8)
-        periodo = f"Período: {desde.strftime('%d/%m/%Y')} — {hasta.strftime('%d/%m/%Y')}"
+        periodo = (
+            f"Período: {desde.strftime('%d/%m/%Y')} — {hasta.strftime('%d/%m/%Y')}"
+        )
         c.drawString(MARGIN, y, periodo)
         c.drawRightString(W - MARGIN, y, f"Página {page_num[0]}")
         y -= 3 * mm
@@ -213,11 +231,13 @@ def _build_historial_pdf(
         return y
 
     total_pagado = sum(
-        float(s.total or 0) for s in ventas
+        float(s.total or 0)
+        for s in ventas
         if getattr(s, "estado_pago", "PAGADO") == "PAGADO"
     )
     total_pendiente = sum(
-        float(s.total or 0) for s in ventas
+        float(s.total or 0)
+        for s in ventas
         if getattr(s, "estado_pago", "PAGADO") == "PENDIENTE"
     )
 
@@ -247,11 +267,11 @@ def _build_historial_pdf(
     y -= 4 * mm
 
     COL_POSITIONS = {
-        "factura":   (MARGIN,            28 * mm),
-        "fecha":     (MARGIN + 30 * mm,  30 * mm),
-        "productos": (MARGIN + 62 * mm,  68 * mm),
-        "total":     (MARGIN + 132 * mm, 28 * mm),
-        "estado":    (MARGIN + 162 * mm, 22 * mm),
+        "factura": (MARGIN, 28 * mm),
+        "fecha": (MARGIN + 30 * mm, 30 * mm),
+        "productos": (MARGIN + 62 * mm, 68 * mm),
+        "total": (MARGIN + 132 * mm, 28 * mm),
+        "estado": (MARGIN + 162 * mm, 22 * mm),
     }
 
     def draw_table_header(y):
@@ -260,11 +280,11 @@ def _build_historial_pdf(
         c.setFillColor(COL_CAB_TXT)
         c.setFont("Helvetica-Bold", 6.5)
         for xpos, txt in [
-            (COL_POSITIONS["factura"][0],   "N° FACTURA"),
-            (COL_POSITIONS["fecha"][0],     "FECHA"),
+            (COL_POSITIONS["factura"][0], "N° FACTURA"),
+            (COL_POSITIONS["fecha"][0], "FECHA"),
             (COL_POSITIONS["productos"][0], "PRODUCTOS"),
-            (COL_POSITIONS["total"][0],     "TOTAL"),
-            (COL_POSITIONS["estado"][0],    "ESTADO"),
+            (COL_POSITIONS["total"][0], "TOTAL"),
+            (COL_POSITIONS["estado"][0], "ESTADO"),
         ]:
             c.drawString(xpos + 1 * mm, y - 4 * mm, txt)
         return y - 8 * mm
@@ -288,7 +308,9 @@ def _build_historial_pdf(
                     lines.append(current)
                 while c.stringWidth(item, "Helvetica", font_size) > max_w:
                     cut = item
-                    while cut and c.stringWidth(cut + "…", "Helvetica", font_size) > max_w:
+                    while (
+                        cut and c.stringWidth(cut + "…", "Helvetica", font_size) > max_w
+                    ):
                         cut = cut[:-1]
                     lines.append(cut + "…")
                     item = ""
@@ -302,7 +324,7 @@ def _build_historial_pdf(
         es_pendiente = getattr(s, "estado_pago", "PAGADO") == "PENDIENTE"
 
         prods = []
-        for d in (s.details or []):
+        for d in s.details or []:
             nombre = d.product.nombre if d.product else f"#{d.product_id}"
             prods.append(f"{nombre} ({_qty(d.cantidad)})")
         prod_lines = wrap_productos(prods, PROD_COL_W, 6.5)
@@ -323,7 +345,9 @@ def _build_historial_pdf(
 
         c.setFillColor(COL_TEXT)
         c.setFont("Helvetica-Bold", 7.5)
-        c.drawString(COL_POSITIONS["factura"][0] + 1 * mm, mid_y, s.numero_factura or f"#{s.id}")
+        c.drawString(
+            COL_POSITIONS["factura"][0] + 1 * mm, mid_y, s.numero_factura or f"#{s.id}"
+        )
 
         c.setFillColor(COL_MUTED)
         c.setFont("Helvetica", 7)
@@ -343,13 +367,15 @@ def _build_historial_pdf(
         c.setFont("Helvetica-Bold", 8)
         c.drawRightString(
             COL_POSITIONS["total"][0] + COL_POSITIONS["total"][1] - 1 * mm,
-            mid_y, _fmt_cop(float(s.total or 0)),
+            mid_y,
+            _fmt_cop(float(s.total or 0)),
         )
 
         c.setFillColor(COL_YELLOW if es_pendiente else COL_GREEN)
         c.setFont("Helvetica-Bold", 6.5)
         c.drawString(
-            COL_POSITIONS["estado"][0] + 1 * mm, mid_y,
+            COL_POSITIONS["estado"][0] + 1 * mm,
+            mid_y,
             "PENDIENTE" if es_pendiente else "PAGADO",
         )
 
@@ -381,7 +407,8 @@ def _build_historial_pdf(
     c.setFillColor(COL_MUTED)
     c.setFont("Helvetica", 6)
     c.drawCentredString(
-        W / 2, y,
+        W / 2,
+        y,
         f"Generado por {empresa} — {datetime.now().strftime('%d/%m/%Y %H:%M')}",
     )
     c.save()

@@ -236,7 +236,7 @@ class HistorialClienteDialog(QDialog):
                 return it
 
             self.tbl.setItem(row, 0, cell(str(s.id), Qt.AlignCenter | Qt.AlignVCenter))
-            self.tbl.setItem(row, 1, cell(s.numero_factura or "—"))
+            self.tbl.setItem(row, 1, cell((s.numero_factura or "—").upper()))
             self.tbl.setItem(row, 2, cell(fmt_fecha(s.fecha)))
             self.tbl.setItem(row, 3, cell(prods_txt))
 

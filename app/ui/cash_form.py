@@ -102,6 +102,9 @@ class CashForm(QDialog):
         self.txt_referencia.setPlaceholderText(
             "Ej: Factura 123 / Venta #10  (opcional)"
         )
+        self.txt_referencia.textEdited.connect(
+            lambda t: self.txt_referencia.setText(t.upper())
+        )
         row_ref.addWidget(self.txt_referencia)
         layout.addLayout(row_ref)
 
@@ -148,7 +151,7 @@ class CashForm(QDialog):
             QMessageBox.warning(self, "Monto inválido", str(e))
             return
 
-        referencia = (self.txt_referencia.text() or "").strip() or None
+        referencia = (self.txt_referencia.text() or "").strip().upper() or None
         obs = (self.txt_obs.toPlainText() or "").strip() or None
 
         try:

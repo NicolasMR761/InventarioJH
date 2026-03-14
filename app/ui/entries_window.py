@@ -98,6 +98,9 @@ class EntriesWindow(QWidget):
         )
         self.txt_factura.setMinimumWidth(280)
         self.txt_factura.setMaximumWidth(320)
+        self.txt_factura.textEdited.connect(
+            lambda t: self.txt_factura.setText(t.upper())
+        )
         row2.addWidget(self.txt_factura)
         row2.addStretch()
         layout.addLayout(row2)
@@ -157,8 +160,8 @@ class EntriesWindow(QWidget):
         hh.setSectionResizeMode(1, QHeaderView.Fixed)
         hh.setSectionResizeMode(2, QHeaderView.Fixed)
         hh.setSectionResizeMode(3, QHeaderView.Fixed)
-        self.table.setColumnWidth(1, 110)
-        self.table.setColumnWidth(2, 150)
+        self.table.setColumnWidth(1, 90)  # Cantidad — más angosta
+        self.table.setColumnWidth(2, 170)  # Precio compra — más ancha
         self.table.setColumnWidth(3, 140)
 
         layout.addWidget(self.table, 1)
@@ -375,6 +378,33 @@ class EntriesWindow(QWidget):
             p for p in listar_productos("", incluir_inactivos=True) if p.activo
         ]
 
+    def _autocompletar_precio(self, row: int):
+        """Rellena precio compra con el costo promedio del producto seleccionado."""
+        cbo = self.table.cellWidget(row, 0)
+        if not cbo:
+            return
+        product_id = cbo.currentData()
+        if not product_id:
+            return
+        prod = next((p for p in self._productos if p.id == product_id), None)
+        if not prod:
+            return
+        costo = float(getattr(prod, "costo_promedio", 0.0) or 0.0)
+        if costo > 0:
+            it = self.table.item(row, 2)
+            # Solo autocompletar si el precio actual es 0 (no pisar lo que el usuario ya escribió)
+            precio_actual = self._parse_float(it.text() if it else "0")
+            if precio_actual == 0:
+                val_txt = (
+                    f"{int(costo)}"
+                    if costo == int(costo)
+                    else f"{costo:g}".replace(".", ",")
+                )
+                new_it = QTableWidgetItem(val_txt)
+                new_it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.table.setItem(row, 2, new_it)
+                self.recalcular_totales()
+
     def agregar_fila(self):
         self.table.blockSignals(True)
         row = self.table.rowCount()
@@ -400,6 +430,9 @@ class EntriesWindow(QWidget):
             unidad = (p.unidad or "und").strip()
             cbo_prod.addItem(f"{p.codigo} — {p.nombre}  [{unidad}]", p.id)
         cbo_prod.currentIndexChanged.connect(self.recalcular_totales)
+        cbo_prod.currentIndexChanged.connect(
+            lambda idx, r=row: self._autocompletar_precio(r)
+        )
         self.table.setCellWidget(row, 0, cbo_prod)
 
         for col, val in [(1, "1"), (2, "0")]:
@@ -407,13 +440,8 @@ class EntriesWindow(QWidget):
             it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.table.setItem(row, col, it)
 
-        item_sub = QTableWidgetItem("$0,00")
-        item_sub.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        item_sub.setFlags(item_sub.flags() & ~Qt.ItemIsEditable)
-        item_sub.setForeground(QBrush(QColor("#4ade80")))
-        self.table.setItem(row, 3, item_sub)
-
         self.table.blockSignals(False)
+        self._autocompletar_precio(row)
         self.recalcular_totales()
 
     def quitar_fila(self):
@@ -499,7 +527,7 @@ class EntriesWindow(QWidget):
             )
             return
 
-        numero_factura = self.txt_factura.text().strip()
+        numero_factura = self.txt_factura.text().strip().upper()
         if not numero_factura:
             QMessageBox.warning(
                 self, "Campo obligatorio", "El número de factura es obligatorio."

@@ -5,14 +5,22 @@ Widgets reutilizables compartidos entre ventanas:
 
   · CommaDoubleSpinBox  — QDoubleSpinBox que acepta punto, muestra coma
   · CommaDelegate       — delegado para tablas: celdas numéricas con coma
+  · CopSpinBox          — QSpinBox para precios COP con separador de miles
+  · _FixedTable         — QTableWidget con scroll interno (no propaga rueda)
 ──────────────────────────────────────────────────────────────────────────────
 """
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QDoubleSpinBox, QStyledItemDelegate, QLineEdit
+from PySide6.QtWidgets import (
+    QDoubleSpinBox,
+    QStyledItemDelegate,
+    QLineEdit,
+    QSpinBox,
+    QTableWidget,
+)
 from PySide6.QtCore import Qt, QLocale
-from PySide6.QtGui import QValidator
+from PySide6.QtGui import QValidator, QWheelEvent
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -170,10 +178,6 @@ class CommaDelegate(QStyledItemDelegate):
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  CopSpinBox
-#  SpinBox para precios en COP: muestra separador de miles con punto (ej: $6.000)
-#  Sube/baja de 50 en 50. Acepta entrada con o sin puntos.
-# ─────────────────────────────────────────────────────────────────────────────
-from PySide6.QtWidgets import QSpinBox
 
 
 class CopSpinBox(QSpinBox):
@@ -210,10 +214,6 @@ class CopSpinBox(QSpinBox):
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  _FixedTable
-#  QTableWidget con scroll interno que NO propaga la rueda al QScrollArea padre.
-# ─────────────────────────────────────────────────────────────────────────────
-from PySide6.QtWidgets import QTableWidget
-from PySide6.QtGui import QWheelEvent
 
 
 class _FixedTable(QTableWidget):
