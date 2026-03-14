@@ -7,6 +7,7 @@ Widgets reutilizables compartidos entre ventanas:
   · CommaDelegate       — delegado para tablas: celdas numéricas con coma
 ──────────────────────────────────────────────────────────────────────────────
 """
+
 from __future__ import annotations
 
 from PySide6.QtWidgets import QDoubleSpinBox, QStyledItemDelegate, QLineEdit
@@ -165,3 +166,59 @@ class CommaDelegate(QStyledItemDelegate):
             return formatted
         except ValueError:
             return text
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  CopSpinBox
+#  SpinBox para precios en COP: muestra separador de miles con punto (ej: $6.000)
+#  Sube/baja de 50 en 50. Acepta entrada con o sin puntos.
+# ─────────────────────────────────────────────────────────────────────────────
+from PySide6.QtWidgets import QSpinBox
+
+
+class CopSpinBox(QSpinBox):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimum(0)
+        self.setMaximum(99_999_999)
+        self.setSingleStep(50)
+        self.setPrefix("$")
+
+    def textFromValue(self, value: int) -> str:
+        s = ""
+        digits = str(abs(value))
+        for i, ch in enumerate(reversed(digits)):
+            if i > 0 and i % 3 == 0:
+                s = "." + s
+            s = ch + s
+        return s
+
+    def valueFromText(self, text: str) -> int:
+        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
+        try:
+            return int(clean)
+        except ValueError:
+            return 0
+
+    def validate(self, text: str, pos: int):
+        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
+        if clean == "" or clean.isdigit():
+            return (QValidator.Acceptable, text, pos)
+        return (QValidator.Invalid, text, pos)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  _FixedTable
+#  QTableWidget con scroll interno que NO propaga la rueda al QScrollArea padre.
+# ─────────────────────────────────────────────────────────────────────────────
+from PySide6.QtWidgets import QTableWidget
+from PySide6.QtGui import QWheelEvent
+
+
+class _FixedTable(QTableWidget):
+    """Tabla con scroll interno — no propaga rueda al padre."""
+
+    def wheelEvent(self, event: QWheelEvent):
+        super().wheelEvent(event)
+        event.accept()

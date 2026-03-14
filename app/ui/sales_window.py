@@ -8,8 +8,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QComboBox,
-    QSpinBox,
-    QDoubleSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QMessageBox,
@@ -20,9 +18,8 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QFrame,
     QScrollArea,
-    QAbstractScrollArea,
 )
-from PySide6.QtGui import QColor, QBrush, QWheelEvent
+from PySide6.QtGui import QColor, QBrush
 
 from app.db.products_repo import listar_productos
 from app.db.customers_repo import listar_clientes, crear_cliente
@@ -35,60 +32,7 @@ from app.db.sales_repo import (
     registrar_pago_pendiente,
 )
 from app.utils.formatters import fmt_fecha, fmt_qty
-from app.ui.widgets import CommaDoubleSpinBox
-
-
-class CopSpinBox(QSpinBox):
-    """
-    SpinBox para precios en COP:
-    - Muestra separador de miles con punto  (ej: $6.000)
-    - Sube/baja de 50 en 50 con las flechas
-    - Acepta entrada con o sin puntos
-    """
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setMinimum(0)
-        self.setMaximum(99_999_999)
-        self.setSingleStep(50)
-        self.setPrefix("$")
-
-    def textFromValue(self, value: int) -> str:
-        s = ""
-        digits = str(abs(value))
-        for i, ch in enumerate(reversed(digits)):
-            if i > 0 and i % 3 == 0:
-                s = "." + s
-            s = ch + s
-        return s
-
-    def valueFromText(self, text: str) -> int:
-        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
-        try:
-            return int(clean)
-        except ValueError:
-            return 0
-
-    def validate(self, text: str, pos: int):
-        from PySide6.QtGui import QValidator
-
-        clean = text.replace("$", "").replace(".", "").replace(",", "").strip()
-        if clean == "" or clean.isdigit():
-            return (QValidator.Acceptable, text, pos)
-        return (QValidator.Invalid, text, pos)
-
-
-class _FixedTable(QTableWidget):
-    """
-    Tabla con altura fija y scroll interno propio.
-    La rueda del mouse scrollea DENTRO de la tabla.
-    NO propaga el evento al QScrollArea padre, evitando
-    que la página entera se mueva al scrollear sobre la tabla.
-    """
-
-    def wheelEvent(self, event: QWheelEvent):
-        super().wheelEvent(event)
-        event.accept()
+from app.ui.widgets import CommaDoubleSpinBox, CopSpinBox, _FixedTable
 
 
 class SalesWindow(QWidget):
@@ -682,7 +626,11 @@ class SalesWindow(QWidget):
                 }
             )
             stock = float(p.stock_actual or 0)
-            stock_txt = fmt_qty(stock)
+            stock_txt = (
+                str(int(stock))
+                if stock == int(stock)
+                else f"{stock:.2f}".replace(".", ",")
+            )
             self.cbo_producto.addItem(f"{p.nombre}  (Stock: {stock_txt})", p.id)
         self.cbo_producto.blockSignals(False)
         self._autocompletar_precio(self.cbo_producto.currentIndex())
@@ -784,8 +732,16 @@ class SalesWindow(QWidget):
             stock_real = stock_disp - ya_en_form
             nombre_simple = nombre.split("  (")[0]
             if cantidad > stock_real:
-                stock_disp_txt = fmt_qty(stock_real)
-                ya_disp_txt = fmt_qty(ya_en_form)
+                stock_disp_txt = (
+                    str(int(stock_real))
+                    if stock_real == int(stock_real)
+                    else f"{stock_real:.2f}".replace(".", ",")
+                )
+                ya_disp_txt = (
+                    str(int(ya_en_form))
+                    if ya_en_form == int(ya_en_form)
+                    else f"{ya_en_form:.2f}".replace(".", ",")
+                )
                 QMessageBox.warning(
                     self,
                     "Stock insuficiente",
@@ -803,7 +759,11 @@ class SalesWindow(QWidget):
         self.tbl.setRowHeight(row, 30)
         self.tbl.setItem(row, 0, QTableWidgetItem(str(product_id)))
         self.tbl.setItem(row, 1, QTableWidgetItem(nombre))
-        cant_txt = fmt_qty(cantidad)
+        cant_txt = (
+            str(int(cantidad))
+            if cantidad == int(cantidad)
+            else f"{cantidad:.2f}".replace(".", ",")
+        )
         it_c = QTableWidgetItem(cant_txt)
         it_c.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.tbl.setItem(row, 2, it_c)
@@ -979,7 +939,9 @@ class SalesWindow(QWidget):
         for d in sale.details:
             nombre = d.product.nombre if d.product else f"Producto #{d.product_id}"
             cant = float(d.cantidad or 0)
-            cant_txt = fmt_qty(cant)
+            cant_txt = (
+                str(int(cant)) if cant == int(cant) else f"{cant:.2f}".replace(".", ",")
+            )
             items_html += f"""
             <tr>
                 <td style='padding:7px 0;color:#cbd5e1;font-size:13px;
