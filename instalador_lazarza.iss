@@ -6,7 +6,7 @@
 ; ─────────────────────────────────────────────────────────────
 
 #define AppName      "Inventario Zarza"
-#define AppVersion   "1.8.2"
+#define AppVersion   "1.8.3"
 #define AppPublisher "La Zarza Distribuidora"
 #define AppExeName   "InventarioJH.exe"
 #define AppIcon      "assets\icon.ico"
