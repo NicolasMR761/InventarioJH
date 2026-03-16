@@ -196,6 +196,9 @@ class SalesWindow(QWidget):
         self.txt_factura.setObjectName("inputField")
         self.txt_factura.setPlaceholderText("Nro. factura…")
         self.txt_factura.setFixedWidth(120)
+        self.txt_factura.textEdited.connect(
+            lambda t: self.txt_factura.setText(t.upper())
+        )
         row2.addWidget(self.txt_factura)
 
         lbl_cl = QLabel("Cliente:")
@@ -570,7 +573,7 @@ class SalesWindow(QWidget):
             self.tbl_hist.setItem(
                 row, 0, cell(str(s.id), Qt.AlignCenter | Qt.AlignVCenter)
             )
-            self.tbl_hist.setItem(row, 1, cell(s.numero_factura or "—"))
+            self.tbl_hist.setItem(row, 1, cell((s.numero_factura or "—").upper()))
             self.tbl_hist.setItem(row, 2, cell(fmt_fecha(s.fecha)))
             self.tbl_hist.setItem(row, 3, cell(cliente_nombre))
 
@@ -722,7 +725,7 @@ class SalesWindow(QWidget):
             cliente_nombre = s.customer.nombre if getattr(s, "customer", None) else "—"
             self.tbl_pendientes.setItem(row, 0, QTableWidgetItem(str(s.id)))
             self.tbl_pendientes.setItem(
-                row, 1, QTableWidgetItem(s.numero_factura or "—")
+                row, 1, QTableWidgetItem((s.numero_factura or "—").upper())
             )
             self.tbl_pendientes.setItem(row, 2, QTableWidgetItem(fmt_fecha(s.fecha)))
             self.tbl_pendientes.setItem(row, 3, QTableWidgetItem(cliente_nombre))
@@ -855,7 +858,7 @@ class SalesWindow(QWidget):
         if not self.items:
             QMessageBox.warning(self, "Ventas", "Agrega al menos 1 producto.")
             return
-        numero_factura = self.txt_factura.text().strip()
+        numero_factura = self.txt_factura.text().strip().upper()
         if not numero_factura:
             QMessageBox.warning(
                 self, "Obligatorio", "El número de factura es obligatorio."
@@ -993,7 +996,7 @@ class SalesWindow(QWidget):
         cliente_nombre = (
             sale.customer.nombre if getattr(sale, "customer", None) else "—"
         )
-        factura_txt = sale.numero_factura or f"#{sale.id}"
+        factura_txt = (sale.numero_factura or f"#{sale.id}").upper()
 
         items_html = ""
         for d in sale.details:
