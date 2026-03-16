@@ -196,9 +196,6 @@ class SalesWindow(QWidget):
         self.txt_factura.setObjectName("inputField")
         self.txt_factura.setPlaceholderText("Nro. factura…")
         self.txt_factura.setFixedWidth(120)
-        self.txt_factura.textEdited.connect(
-            lambda t: self.txt_factura.setText(t.upper())
-        )
         row2.addWidget(self.txt_factura)
 
         lbl_cl = QLabel("Cliente:")
@@ -321,6 +318,9 @@ class SalesWindow(QWidget):
         self.btn_refrescar = QPushButton("↺  Refrescar")
         self.btn_refrescar.setObjectName("btnSecondary")
         hdr_hist.addWidget(self.btn_refrescar)
+        self.btn_excel = QPushButton("↓ Excel")
+        self.btn_excel.setObjectName("btnSecondary")
+        hdr_hist.addWidget(self.btn_excel)
         self.btn_anular = QPushButton("✕  Anular seleccionada")
         self.btn_anular.setObjectName("btnDanger")
         hdr_hist.addWidget(self.btn_anular)
@@ -377,6 +377,7 @@ class SalesWindow(QWidget):
         self.btn_quitar.clicked.connect(self.quitar_item)
         self.btn_guardar.clicked.connect(self.guardar_venta)
         self.btn_anular.clicked.connect(self.anular_seleccionada)
+        self.btn_excel.clicked.connect(self.exportar_excel)
         self.btn_nuevo_cliente.clicked.connect(self.crear_cliente_rapido)
         self.btn_refrescar.clicked.connect(self.refrescar_todo)
         self.cbo_producto.currentIndexChanged.connect(self._autocompletar_precio)
@@ -569,7 +570,7 @@ class SalesWindow(QWidget):
             self.tbl_hist.setItem(
                 row, 0, cell(str(s.id), Qt.AlignCenter | Qt.AlignVCenter)
             )
-            self.tbl_hist.setItem(row, 1, cell((s.numero_factura or "—").upper()))
+            self.tbl_hist.setItem(row, 1, cell(s.numero_factura or "—"))
             self.tbl_hist.setItem(row, 2, cell(fmt_fecha(s.fecha)))
             self.tbl_hist.setItem(row, 3, cell(cliente_nombre))
 
@@ -721,7 +722,7 @@ class SalesWindow(QWidget):
             cliente_nombre = s.customer.nombre if getattr(s, "customer", None) else "—"
             self.tbl_pendientes.setItem(row, 0, QTableWidgetItem(str(s.id)))
             self.tbl_pendientes.setItem(
-                row, 1, QTableWidgetItem((s.numero_factura or "—").upper())
+                row, 1, QTableWidgetItem(s.numero_factura or "—")
             )
             self.tbl_pendientes.setItem(row, 2, QTableWidgetItem(fmt_fecha(s.fecha)))
             self.tbl_pendientes.setItem(row, 3, QTableWidgetItem(cliente_nombre))
@@ -854,7 +855,7 @@ class SalesWindow(QWidget):
         if not self.items:
             QMessageBox.warning(self, "Ventas", "Agrega al menos 1 producto.")
             return
-        numero_factura = self.txt_factura.text().strip().upper()
+        numero_factura = self.txt_factura.text().strip()
         if not numero_factura:
             QMessageBox.warning(
                 self, "Obligatorio", "El número de factura es obligatorio."
@@ -992,7 +993,7 @@ class SalesWindow(QWidget):
         cliente_nombre = (
             sale.customer.nombre if getattr(sale, "customer", None) else "—"
         )
-        factura_txt = (sale.numero_factura or f"#{sale.id}").upper()
+        factura_txt = sale.numero_factura or f"#{sale.id}"
 
         items_html = ""
         for d in sale.details:
@@ -1152,3 +1153,201 @@ class SalesWindow(QWidget):
         from app.ui.sale_receipt import exportar_recibo_pdf
 
         exportar_recibo_pdf(self, sale_id)
+
+    # ── EXPORTAR EXCEL ────────────────────────────────────
+    def exportar_excel(self) -> None:
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(
+                self,
+                "Dependencia faltante",
+                "Instala openpyxl:\n\npip install openpyxl",
+            )
+            return
+
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from app.utils.formatters import fmt_fecha
+        from app.utils.config_manager import cargar_config
+        from datetime import datetime
+
+        try:
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Guardar Excel", "ventas.xlsx", "Excel (*.xlsx)"
+            )
+            if not path:
+                return
+
+            cfg = cargar_config()
+            empresa = cfg.get("empresa_nombre") or "Inventario JH"
+            ventas = self._ventas_cache
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Ventas"
+
+            # ── Paleta profesional B&N ───────────────────
+            # Colores
+            C_HEADER_BG = "2C3E50"  # Gris oscuro elegante
+            C_HEADER_FG = "FFFFFF"
+            C_TITLE_FG = "2C3E50"
+            C_ROW_ALT = "F2F2F2"  # Gris muy claro
+            C_ROW_NORM = "FFFFFF"
+            C_ANULADA_BG = "FDECEA"  # Rojo muy suave
+            C_PENDIENTE_BG = "FFF8E1"  # Amarillo muy suave
+            C_TOTAL_BG = "ECEFF1"  # Gris claro para totales
+            C_BORDER = "BDBDBD"
+
+            borde = Border(
+                left=Side(style="thin", color=C_BORDER),
+                right=Side(style="thin", color=C_BORDER),
+                top=Side(style="thin", color=C_BORDER),
+                bottom=Side(style="thin", color=C_BORDER),
+            )
+            borde_medio = Border(bottom=Side(style="medium", color="2C3E50"))
+
+            # ── Fila 1: Nombre empresa ───────────────────
+            ws.merge_cells("A1:G1")
+            ws["A1"] = empresa.upper()
+            ws["A1"].font = Font(bold=True, size=13, color=C_TITLE_FG)
+            ws["A1"].alignment = Alignment(horizontal="left")
+
+            # ── Fila 2: Título del reporte ───────────────
+            ws.merge_cells("A2:G2")
+            ws["A2"] = "HISTORIAL DE VENTAS"
+            ws["A2"].font = Font(bold=True, size=11, color="555555")
+            ws["A2"].alignment = Alignment(horizontal="left")
+
+            # ── Fila 3: Fecha generación ──────────────────
+            ws.merge_cells("A3:G3")
+            ws["A3"] = (
+                f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}   ·   Total registros: {len(ventas)}"
+            )
+            ws["A3"].font = Font(size=9, color="888888", italic=True)
+            ws["A3"].alignment = Alignment(horizontal="left")
+
+            ws.row_dimensions[4].height = 6  # espacio
+
+            # ── Fila 5: Cabecera ──────────────────────────
+            HEADER_ROW = 5
+            headers = [
+                "ID",
+                "N° FACTURA",
+                "FECHA",
+                "CLIENTE",
+                "MÉTODO PAGO",
+                "ESTADO",
+                "TOTAL ($)",
+            ]
+            for col, h in enumerate(headers, 1):
+                cell = ws.cell(row=HEADER_ROW, column=col, value=h)
+                cell.font = Font(bold=True, color=C_HEADER_FG, size=10)
+                cell.fill = PatternFill("solid", fgColor=C_HEADER_BG)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = borde
+            ws.row_dimensions[HEADER_ROW].height = 20
+
+            # ── Filas de datos ────────────────────────────
+            totales = {"pagado": 0.0, "pendiente": 0.0, "anulado": 0.0}
+
+            for i, s in enumerate(ventas):
+                row = HEADER_ROW + 1 + i
+                es_anulada = getattr(s, "anulada", False)
+                es_pendiente = getattr(s, "estado_pago", "PAGADO") == "PENDIENTE"
+                cliente_txt = s.customer.nombre if getattr(s, "customer", None) else "—"
+                total = float(s.total or 0)
+
+                if es_anulada:
+                    estado_txt = "ANULADA"
+                    bg = C_ANULADA_BG
+                    totales["anulado"] += total
+                elif es_pendiente:
+                    estado_txt = "PENDIENTE"
+                    bg = C_PENDIENTE_BG
+                    totales["pendiente"] += total
+                else:
+                    estado_txt = "PAGADO"
+                    bg = C_ROW_ALT if i % 2 == 0 else C_ROW_NORM
+                    totales["pagado"] += total
+
+                fill_row = PatternFill("solid", fgColor=bg)
+                font_row = Font(size=10, color="212121")
+
+                valores = [
+                    s.id,
+                    (s.numero_factura or f"#{s.id}").upper(),
+                    fmt_fecha(s.fecha),
+                    cliente_txt,
+                    getattr(s, "metodo_pago", "") or "—",
+                    estado_txt,
+                    total,
+                ]
+                for col, val in enumerate(valores, 1):
+                    cell = ws.cell(row=row, column=col, value=val)
+                    cell.fill = fill_row
+                    cell.font = font_row
+                    cell.border = borde
+                    if col == 1:  # ID centrado
+                        cell.alignment = Alignment(horizontal="center")
+                    elif col == 7:  # Total derecha
+                        cell.number_format = "#,##0"
+                        cell.alignment = Alignment(horizontal="right")
+                    elif col == 6:  # Estado centrado
+                        cell.alignment = Alignment(horizontal="center")
+                        if es_anulada:
+                            cell.font = Font(size=10, color="C0392B", bold=True)
+                        elif es_pendiente:
+                            cell.font = Font(size=10, color="E67E22", bold=True)
+                        else:
+                            cell.font = Font(size=10, color="27AE60", bold=True)
+
+                ws.row_dimensions[row].height = 16
+
+            # ── Fila separadora ───────────────────────────
+            sep_row = HEADER_ROW + len(ventas) + 1
+            for col in range(1, 8):
+                ws.cell(sep_row, col).border = borde_medio
+
+            # ── Bloque resumen ────────────────────────────
+            res_row = sep_row + 1
+            fill_res = PatternFill("solid", fgColor=C_TOTAL_BG)
+
+            resumen_items = [
+                ("Total Pagado", totales["pagado"], "27AE60"),
+                ("Total Pendiente", totales["pendiente"], "E67E22"),
+                ("Total Anulado", totales["anulado"], "C0392B"),
+            ]
+            for offset, (label, valor, color) in enumerate(resumen_items):
+                r = res_row + offset
+                # Label en col F
+                lc = ws.cell(r, 6, label)
+                lc.font = Font(bold=True, size=10, color="444444")
+                lc.fill = fill_res
+                lc.alignment = Alignment(horizontal="right")
+                lc.border = borde
+                # Valor en col G
+                vc = ws.cell(r, 7, valor)
+                vc.font = Font(bold=True, size=11, color=color)
+                vc.fill = fill_res
+                vc.number_format = "#,##0"
+                vc.alignment = Alignment(horizontal="right")
+                vc.border = borde
+                ws.row_dimensions[r].height = 18
+
+            # ── Anchos de columna ─────────────────────────
+            anchos = [7, 16, 20, 30, 16, 14, 16]
+            for i, w in enumerate(anchos, 1):
+                ws.column_dimensions[get_column_letter(i)].width = w
+
+            # ── Fijar fila de cabecera ────────────────────
+            ws.freeze_panes = f"A{HEADER_ROW + 1}"
+
+            wb.save(path)
+            QMessageBox.information(self, "✅ Excel exportado", f"Guardado en:\n{path}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))

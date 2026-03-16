@@ -24,8 +24,19 @@ from app.db.database import init_db, get_app_data_dir
 from PySide6.QtGui import QPainter, QPen, QLinearGradient, QColor as QColorG
 from PySide6.QtCore import QRect, QPoint
 from app.utils.backup import crear_backup
-from app.utils.formatters import fmt_cop as _fmt_cop
-from app.version import APP_VERSION
+
+APP_VERSION = "v1.8.2"
+
+
+# ─────────────────────────────────────────────
+#  Helpers de formato
+# ─────────────────────────────────────────────
+def _fmt_cop(value) -> str:
+    try:
+        n = int(round(float(value or 0)))
+        return "$" + f"{n:,}".replace(",", ".")
+    except Exception:
+        return "$0"
 
 
 # ─────────────────────────────────────────────
@@ -417,6 +428,8 @@ class MainWindow(QMainWindow):
                 2,
                 0,
             ),
+            ("", "Próximamente…", self._prox, 2, 1),
+            ("", "Próximamente…", self._prox, 2, 2),
         ]
         for title, desc, slot, r, c in tiles:
             t = self._make_tile(title, desc, slot)
@@ -622,6 +635,23 @@ class MainWindow(QMainWindow):
     def _make_tile(self, title: str, desc: str, slot) -> DashboardTile:
         t = DashboardTile(title, desc)
         t.clicked.connect(slot)
+        # Tiles "Próximamente" — apariencia atenuada
+        if "Próximamente" in desc:
+            t.setObjectName("tileProx")
+            t.setStyleSheet(
+                """
+                #tileProx {
+                    background: #080f1e;
+                    border: 1px dashed #1e293b;
+                    border-radius: 12px;
+                    min-height: 95px;
+                }
+                #tileProx:hover { background: #080f1e; border-color: #1e293b; }
+            """
+            )
+            # Atenuar los labels internos
+            for lbl in t.findChildren(QLabel):
+                lbl.setStyleSheet("color: #1e293b;")
         return t
 
     def _logo_path(self) -> Path:
