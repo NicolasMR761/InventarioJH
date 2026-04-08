@@ -99,7 +99,7 @@ def obtener_kardex(
                 referencia=f"Venta #{sale_id}",
                 cantidad=-cant,
                 precio=precio,
-                subtotal=-sub,
+                subtotal=sub,  # ✅ FIX: subtotal siempre positivo (el tipo VENTA ya indica salida)
             )
         )
 

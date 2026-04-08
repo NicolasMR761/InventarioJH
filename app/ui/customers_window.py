@@ -39,15 +39,12 @@ from app.db.customers_repo import (
     crear_cliente,
     actualizar_cliente,
     cambiar_estado_cliente,
+    contar_ventas_cliente,
+    eliminar_cliente,
 )
 from app.utils.formatters import fmt_fecha, fmt_qty as _qty, fmt_cop as _fmt_cop
 from app.ui.customer_form import ClienteFormDialog
 from app.ui.customer_pdf import exportar_historial_cliente_pdf, mostrar_factura_compacta
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Helpers
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -349,6 +346,12 @@ class CustomersWindow(QWidget):
             btn.clicked.connect(slot)
             bar.addWidget(btn)
 
+        # ── Botón Eliminar (rojo) ────────────────────────────
+        btn_eliminar = QPushButton("🗑  Eliminar")
+        btn_eliminar.setObjectName("btnDanger")
+        btn_eliminar.clicked.connect(self._eliminar)
+        bar.addWidget(btn_eliminar)
+
         lay.addLayout(bar)
 
         # ── Tabla ─────────────────────────────────────────────
@@ -478,6 +481,60 @@ class CustomersWindow(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))
 
+    def _eliminar(self):
+        c = self._selected_customer()
+        if not c:
+            return
+
+        num_ventas = contar_ventas_cliente(c.id)
+
+        if num_ventas > 0:
+            # Cliente con historial → advertencia fuerte + confirmación extra
+            resp = QMessageBox.warning(
+                self,
+                "⚠️ Eliminar cliente con ventas",
+                f"El cliente <b>{c.nombre}</b> tiene <b>{num_ventas} venta(s)</b> registrada(s).<br><br>"
+                f"Si lo eliminas, el historial de ventas quedará sin cliente asociado.<br>"
+                f"Esta acción <b>no se puede deshacer</b>.<br><br>"
+                f"¿Deseas eliminarlo de todas formas?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if resp != QMessageBox.Yes:
+                return
+            # Segunda confirmación para clientes con ventas
+            resp2 = QMessageBox.critical(
+                self,
+                "Confirmar eliminación definitiva",
+                f"¿Estás seguro? Se eliminará permanentemente a <b>{c.nombre}</b>.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if resp2 != QMessageBox.Yes:
+                return
+            forzar = True
+        else:
+            # Cliente sin historial → confirmación simple
+            resp = QMessageBox.question(
+                self,
+                "Eliminar cliente",
+                f"¿Eliminar al cliente <b>{c.nombre}</b>?<br>Esta acción no se puede deshacer.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if resp != QMessageBox.Yes:
+                return
+            forzar = False
+
+        try:
+            eliminar_cliente(c.id, forzar=forzar)
+            self._cargar()
+            QMessageBox.information(
+                self, "Eliminado", f"Cliente '{c.nombre}' eliminado correctamente."
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
     def _ver_historial(self):
         c = self._selected_customer()
         if not c:
@@ -526,6 +583,12 @@ QWidget {
     font-weight: 600; color: #fbbf24; min-height: 30px;
 }
 #btnWarning:hover { background: #92400e; color: #fff; }
+#btnDanger {
+    background: #2d0a0a; border: 1px solid #991b1b;
+    border-radius: 8px; padding: 6px 12px;
+    font-weight: 600; color: #f87171; min-height: 30px;
+}
+#btnDanger:hover { background: #991b1b; color: #fff; }
 #productTable {
     background: #0b1120; alternate-background-color: #0f1a2e;
     border: 1px solid #1e293b; border-radius: 8px;
