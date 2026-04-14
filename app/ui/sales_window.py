@@ -304,7 +304,8 @@ class SalesWindow(QWidget):
         self.tbl_pendientes.setColumnWidth(2, 140)
         self.tbl_pendientes.setColumnWidth(4, 120)
         self.tbl_pendientes.setColumnWidth(5, 100)
-        self.tbl_pendientes.setFixedHeight(140)
+        self.tbl_pendientes.setMinimumHeight(60)
+        self.tbl_pendientes.setMaximumHeight(280)
         root.addWidget(self.tbl_pendientes)
 
         sep2 = QFrame()
@@ -356,8 +357,8 @@ class SalesWindow(QWidget):
         self.tbl_hist.setColumnWidth(4, 120)
         self.tbl_hist.setColumnWidth(5, 80)
         self.tbl_hist.setColumnWidth(6, 80)
-        self.tbl_hist.setFixedHeight(520)
-        root.addWidget(self.tbl_hist)
+        self.tbl_hist.setMinimumHeight(200)
+        root.addWidget(self.tbl_hist, 1)  # stretch=1 → crece con la ventana
 
         # Paginación historial
         pager = QHBoxLayout()
@@ -389,6 +390,25 @@ class SalesWindow(QWidget):
         self.btn_next.clicked.connect(self._pag_siguiente)
 
         self.refrescar_todo()
+
+    # ── ALTURA DINÁMICA DE TABLAS ─────────────────────────
+    def _ajustar_altura_tabla(
+        self,
+        tabla: QTableWidget,
+        min_h: int = 60,
+        max_h: int = 280,
+    ) -> None:
+        """
+        Ajusta la altura de una tabla según su contenido real,
+        respetando un mínimo y máximo en píxeles.
+        Útil para tablas secundarias (ej: pendientes) que no deben
+        ocupar espacio fijo cuando están vacías o tienen pocos registros.
+        """
+        header_h = tabla.horizontalHeader().height()
+        rows_h = sum(tabla.rowHeight(r) for r in range(tabla.rowCount()))
+        # +2 para el borde
+        ideal = header_h + rows_h + 2
+        tabla.setFixedHeight(max(min_h, min(ideal, max_h)))
 
     # ── ESTILOS ───────────────────────────────────────────
     def _styles(self) -> str:
@@ -750,6 +770,7 @@ class SalesWindow(QWidget):
             btn.clicked.connect(lambda _, sid=sale_id: self.cobrar_pendiente(sid))
             self.tbl_pendientes.setCellWidget(row, 5, btn)
         self.tbl_pendientes.blockSignals(False)
+        self._ajustar_altura_tabla(self.tbl_pendientes, min_h=60, max_h=280)
 
     # ── ACCIONES ─────────────────────────────────────────
     def crear_cliente_rapido(self):
