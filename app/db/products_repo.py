@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from app.db.database import SessionLocal
 from app.db.models import Product
 
 
 def _to_float(value, default: float = 0.0) -> float:
-    """Convierte a float de forma segura."""
     if value is None or value == "":
         return float(default)
     return float(value)
@@ -19,7 +19,6 @@ def crear_producto(
     precio_venta: float = 0.0,
     stock_minimo: float = 0.0,
 ) -> Product:
-    """Crea un producto. Lanza ValueError si el código ya existe."""
     codigo = (codigo or "").strip()
     nombre = (nombre or "").strip()
     unidad = (unidad or "und").strip() or "und"
@@ -46,7 +45,6 @@ def crear_producto(
             unidad=unidad,
             precio_venta=precio_venta,
             stock_minimo=stock_minimo,
-            # stock_actual normalmente inicia en 0 y se maneja por Entradas/Ventas
             activo=True,
         )
         db.add(p)
@@ -72,20 +70,14 @@ def listar_productos(
     texto: str = "",
     incluir_inactivos: bool = True,
 ) -> list[Product]:
-    """Lista productos con filtro por código/nombre."""
     texto = (texto or "").strip()
-
     with SessionLocal() as db:
         q = db.query(Product)
-
         if not incluir_inactivos:
             q = q.filter(Product.activo.is_(True))
-
         if texto:
             like = f"%{texto}%"
-            # Nota: ilike puede comportarse como like en SQLite dependiendo de collation
             q = q.filter(or_(Product.codigo.ilike(like), Product.nombre.ilike(like)))
-
         return q.order_by(Product.id.desc()).all()
 
 
@@ -97,7 +89,6 @@ def actualizar_producto(
     precio_venta: float = 0.0,
     stock_minimo: float = 0.0,
 ) -> Product:
-    """Edita un producto. Valida código único (excepto el mismo producto)."""
     product_id = int(product_id)
     codigo = (codigo or "").strip()
     nombre = (nombre or "").strip()
@@ -139,12 +130,10 @@ def actualizar_producto(
 
 
 def cambiar_estado_producto(product_id: int) -> Product:
-    """Activa/Desactiva un producto y devuelve el producto actualizado."""
     with SessionLocal() as db:
         p = db.query(Product).filter(Product.id == int(product_id)).first()
         if not p:
             raise ValueError("Producto no encontrado.")
-
         p.activo = not bool(p.activo)
         db.commit()
         db.refresh(p)
@@ -152,7 +141,6 @@ def cambiar_estado_producto(product_id: int) -> Product:
 
 
 def desactivar_producto(product_id: int) -> None:
-    """Soft delete (compatibilidad)."""
     with SessionLocal() as db:
         p = db.query(Product).filter(Product.id == int(product_id)).first()
         if not p:
@@ -162,11 +150,28 @@ def desactivar_producto(product_id: int) -> None:
 
 
 def es_stock_bajo(p: Product) -> bool:
-    """
-    Helper para UI:
-    - Solo alerta si stock_minimo > 0
-    - Alerta si stock_actual <= stock_minimo
-    """
     stock = float(getattr(p, "stock_actual", 0.0) or 0.0)
     minimo = float(getattr(p, "stock_minimo", 0.0) or 0.0)
     return minimo > 0 and stock <= minimo
+
+
+def eliminar_producto(product_id: int, forzar: bool = True) -> None:
+    """
+    Elimina el producto del catálogo.
+    Lanza ValueError con mensaje claro si existen registros relacionados (FK).
+    forzar=True por defecto — la confirmación se maneja en la UI.
+    """
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.id == int(product_id)).first()
+        if not p:
+            raise ValueError("Producto no encontrado.")
+        try:
+            db.delete(p)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise ValueError(
+                f"No se puede eliminar '{p.nombre}' porque tiene ventas, entradas u "
+                "otros registros asociados.\n\n"
+                "Puedes desactivarlo en lugar de eliminarlo para conservar el historial."
+            )

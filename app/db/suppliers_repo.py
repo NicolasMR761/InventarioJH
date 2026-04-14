@@ -1,4 +1,5 @@
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from app.db.database import SessionLocal
 from app.db.models import Supplier
 
@@ -26,19 +27,11 @@ def crear_proveedor(nombre, nit=None, telefono=None, direccion=None):
 def listar_proveedores(texto="", incluir_inactivos=True):
     with SessionLocal() as db:
         q = db.query(Supplier)
-
         if not incluir_inactivos:
             q = q.filter(Supplier.activo == True)  # noqa
-
         if texto:
             like = f"%{texto}%"
-            q = q.filter(
-                or_(
-                    Supplier.nombre.ilike(like),
-                    Supplier.nit.ilike(like),
-                )
-            )
-
+            q = q.filter(or_(Supplier.nombre.ilike(like), Supplier.nit.ilike(like)))
         return q.order_by(Supplier.id.desc()).all()
 
 
@@ -77,7 +70,6 @@ def desactivar_proveedor(supplier_id):
         p = db.query(Supplier).filter(Supplier.id == supplier_id).first()
         if not p:
             raise ValueError("Proveedor no encontrado.")
-
         p.activo = False
         db.commit()
 
@@ -87,6 +79,44 @@ def cambiar_estado_proveedor(supplier_id: int) -> None:
         p = db.query(Supplier).filter(Supplier.id == supplier_id).first()
         if not p:
             raise ValueError("Proveedor no encontrado.")
-
         p.activo = not p.activo
         db.commit()
+
+
+def proveedor_tiene_dependencias(supplier_id: int) -> bool:
+    """Devuelve True si el proveedor tiene registros relacionados en otras tablas."""
+    with SessionLocal() as db:
+        p = db.query(Supplier).filter(Supplier.id == int(supplier_id)).first()
+        if not p:
+            return False
+        # Comprueba cualquier relación definida en el modelo (compras, entradas, etc.)
+        for rel in p.__class__.__mapper__.relationships:
+            coleccion = getattr(p, rel.key, None)
+            try:
+                if coleccion is not None and len(list(coleccion)) > 0:
+                    return True
+            except Exception:
+                pass
+        return False
+
+
+def eliminar_proveedor(supplier_id: int, forzar: bool = True) -> None:
+    """
+    Elimina el proveedor del registro.
+    Lanza ValueError con mensaje claro si existen registros relacionados (FK).
+    forzar=True por defecto — la confirmación se maneja en la UI.
+    """
+    with SessionLocal() as db:
+        p = db.query(Supplier).filter(Supplier.id == int(supplier_id)).first()
+        if not p:
+            raise ValueError("Proveedor no encontrado.")
+        try:
+            db.delete(p)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise ValueError(
+                f"No se puede eliminar '{p.nombre}' porque tiene compras u otros "
+                "registros asociados.\n\n"
+                "Puedes desactivarlo en lugar de eliminarlo para conservar el historial."
+            )

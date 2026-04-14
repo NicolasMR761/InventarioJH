@@ -14,7 +14,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QColor, QBrush, QFont
 
-from app.db.suppliers_repo import listar_proveedores, cambiar_estado_proveedor
+from app.db.suppliers_repo import (
+    listar_proveedores,
+    cambiar_estado_proveedor,
+    eliminar_proveedor,
+    desactivar_proveedor,
+)
 
 
 class SuppliersWindow(QWidget):
@@ -35,7 +40,6 @@ class SuppliersWindow(QWidget):
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(14)
 
-        # ── HEADER ──────────────────────────────────────────
         lbl_title = QLabel("🏭 Proveedores")
         lbl_title.setObjectName("pageTitle")
         lbl_sub = QLabel("Gestión de proveedores activos e inactivos")
@@ -64,9 +68,13 @@ class SuppliersWindow(QWidget):
             btn.clicked.connect(slot)
             bar.addWidget(btn)
 
+        btn_eliminar = QPushButton("🗑  Eliminar")
+        btn_eliminar.setObjectName("btnDanger")
+        btn_eliminar.clicked.connect(self.eliminar_seleccionado)
+        bar.addWidget(btn_eliminar)
+
         layout.addLayout(bar)
 
-        # ── SEPARADOR ───────────────────────────────────────
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setObjectName("separator")
@@ -88,12 +96,12 @@ class SuppliersWindow(QWidget):
         self.table.cellDoubleClicked.connect(self._dbl_click_editar)
 
         hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.Fixed)  # ID
-        hh.setSectionResizeMode(1, QHeaderView.Stretch)  # Nombre
-        hh.setSectionResizeMode(2, QHeaderView.Fixed)  # NIT
-        hh.setSectionResizeMode(3, QHeaderView.Fixed)  # Teléfono
-        hh.setSectionResizeMode(4, QHeaderView.Fixed)  # Dirección
-        hh.setSectionResizeMode(5, QHeaderView.Fixed)  # Estado
+        hh.setSectionResizeMode(0, QHeaderView.Fixed)
+        hh.setSectionResizeMode(1, QHeaderView.Stretch)
+        hh.setSectionResizeMode(2, QHeaderView.Fixed)
+        hh.setSectionResizeMode(3, QHeaderView.Fixed)
+        hh.setSectionResizeMode(4, QHeaderView.Fixed)
+        hh.setSectionResizeMode(5, QHeaderView.Fixed)
         self.table.setColumnWidth(0, 50)
         self.table.setColumnWidth(2, 120)
         self.table.setColumnWidth(3, 130)
@@ -102,7 +110,6 @@ class SuppliersWindow(QWidget):
 
         layout.addWidget(self.table, 1)
 
-        # ── FOOTER ──────────────────────────────────────────
         self.lbl_count = QLabel("")
         self.lbl_count.setObjectName("footerLabel")
         layout.addWidget(self.lbl_count)
@@ -112,107 +119,30 @@ class SuppliersWindow(QWidget):
 
     def _styles(self) -> str:
         return """
-        QWidget {
-            background: #0b1120;
-            color: #e2e8f0;
-            font-family: "Segoe UI", Arial, sans-serif;
-            font-size: 13px;
-        }
-        #pageTitle {
-            font-size: 20px;
-            font-weight: 800;
-            color: #f1f5f9;
-            letter-spacing: -0.3px;
-        }
-        #pageSub {
-            font-size: 12px;
-            color: #475569;
-        }
-        #searchBox {
-            background: #111c33;
-            border: 1px solid #1e3a5f;
-            border-radius: 8px;
-            padding: 7px 12px;
-            color: #e2e8f0;
-            font-size: 13px;
-            min-height: 32px;
-        }
+        QWidget { background: #0b1120; color: #e2e8f0; font-family: "Segoe UI", Arial, sans-serif; font-size: 13px; }
+        #pageTitle { font-size: 20px; font-weight: 800; color: #f1f5f9; letter-spacing: -0.3px; }
+        #pageSub { font-size: 12px; color: #475569; }
+        #searchBox { background: #111c33; border: 1px solid #1e3a5f; border-radius: 8px; padding: 7px 12px; color: #e2e8f0; font-size: 13px; min-height: 32px; }
         #searchBox:focus { border: 1px solid #3b82f6; }
-
-        #btnPrimary {
-            background: #2563eb;
-            border: none;
-            border-radius: 8px;
-            padding: 7px 16px;
-            font-weight: 700;
-            color: white;
-            min-height: 32px;
-        }
+        #btnPrimary { background: #2563eb; border: none; border-radius: 8px; padding: 7px 16px; font-weight: 700; color: white; min-height: 32px; }
         #btnPrimary:hover { background: #1d4ed8; }
-
-        #btnSecondary {
-            background: #111c33;
-            border: 1px solid #1e3a5f;
-            border-radius: 8px;
-            padding: 7px 14px;
-            font-weight: 600;
-            color: #94a3b8;
-            min-height: 32px;
-        }
+        #btnSecondary { background: #111c33; border: 1px solid #1e3a5f; border-radius: 8px; padding: 7px 14px; font-weight: 600; color: #94a3b8; min-height: 32px; }
         #btnSecondary:hover { border-color: #3b82f6; color: #e2e8f0; }
-
-        #btnWarning {
-            background: #111c33;
-            border: 1px solid #854d0e;
-            border-radius: 8px;
-            padding: 7px 14px;
-            font-weight: 600;
-            color: #fbbf24;
-            min-height: 32px;
-        }
+        #btnWarning { background: #111c33; border: 1px solid #854d0e; border-radius: 8px; padding: 7px 14px; font-weight: 600; color: #fbbf24; min-height: 32px; }
         #btnWarning:hover { background: #1c1408; border-color: #fbbf24; }
-
-        #separator {
-            border: none;
-            border-top: 1px solid #1e293b;
-        }
-
-        #mainTable {
-            background: #0b1120;
-            alternate-background-color: #0f1a2e;
-            border: 1px solid #1e293b;
-            border-radius: 10px;
-            gridline-color: #1e293b;
-            selection-background-color: #1e3a5f;
-            selection-color: #f1f5f9;
-            outline: none;
-        }
-        #mainTable QHeaderView::section {
-            background: #111c33;
-            color: #475569;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            padding: 8px 12px;
-            border: none;
-            border-bottom: 2px solid #1e293b;
-        }
+        #btnDanger { background: #2d0a0a; border: 1px solid #991b1b; border-radius: 8px; padding: 7px 14px; font-weight: 600; color: #f87171; min-height: 32px; }
+        #btnDanger:hover { background: #991b1b; color: #fff; }
+        #separator { border: none; border-top: 1px solid #1e293b; }
+        #mainTable { background: #0b1120; alternate-background-color: #0f1a2e; border: 1px solid #1e293b; border-radius: 10px; gridline-color: #1e293b; selection-background-color: #1e3a5f; selection-color: #f1f5f9; outline: none; }
+        #mainTable QHeaderView::section { background: #111c33; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 8px 12px; border: none; border-bottom: 2px solid #1e293b; }
         #mainTable::item { padding: 6px 12px; border: none; }
         #mainTable::item:selected { background: #1e3a5f; color: #f1f5f9; }
-
-        QScrollBar:vertical {
-            background: #0b1120; width: 6px; border-radius: 3px;
-        }
-        QScrollBar::handle:vertical {
-            background: #1e3a5f; border-radius: 3px;
-        }
+        QScrollBar:vertical { background: #0b1120; width: 6px; border-radius: 3px; }
+        QScrollBar::handle:vertical { background: #1e3a5f; border-radius: 3px; }
         #footerLabel { font-size: 11px; color: #334155; }
         """
 
     def keyPressEvent(self, event):
-        from PySide6.QtCore import Qt
-
         key = event.key()
         mod = event.modifiers()
         if key == Qt.Key_F5:
@@ -265,7 +195,6 @@ class SuppliersWindow(QWidget):
             )
             self.table.setItem(row, 5, it_estado)
 
-            # Inactivo → texto apagado
             if not es_activo:
                 for col in range(self.table.columnCount()):
                     it = self.table.item(row, col)
@@ -319,8 +248,7 @@ class SuppliersWindow(QWidget):
         r = QMessageBox.question(
             self,
             "Confirmar",
-            f"¿Cambiar estado de '{p.nombre}'?\n"
-            f"Estado actual: {'Activo' if p.activo else 'Inactivo'}",
+            f"¿Cambiar estado de '{p.nombre}'?\nEstado actual: {'Activo' if p.activo else 'Inactivo'}",
         )
         if r != QMessageBox.Yes:
             return
@@ -330,3 +258,55 @@ class SuppliersWindow(QWidget):
             QMessageBox.critical(self, "Error", str(e))
             return
         self.cargar_proveedores()
+
+    def eliminar_seleccionado(self):
+        p = self._get_selected()
+        if not p:
+            QMessageBox.information(
+                self, "Selecciona", "Selecciona un proveedor primero."
+            )
+            return
+
+        resp = QMessageBox.question(
+            self,
+            "Eliminar proveedor",
+            f"¿Eliminar a <b>{p.nombre}</b> del registro?<br><br>"
+            f"El historial de compras no se verá afectado.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if resp != QMessageBox.Yes:
+            return
+
+        try:
+            eliminar_proveedor(p.id, forzar=True)
+            self.cargar_proveedores()
+            QMessageBox.information(
+                self, "Eliminado", f"'{p.nombre}' eliminado del registro."
+            )
+        except ValueError as e:
+            msg = str(e)
+            # Si el error es por dependencias, ofrecer desactivar como alternativa
+            if "registros asociados" in msg:
+                respuesta = QMessageBox.question(
+                    self,
+                    "No se puede eliminar",
+                    f"{msg}\n\n¿Deseas desactivarlo en su lugar?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes,
+                )
+                if respuesta == QMessageBox.Yes:
+                    try:
+                        desactivar_proveedor(p.id)
+                        self.cargar_proveedores()
+                        QMessageBox.information(
+                            self,
+                            "Desactivado",
+                            f"'{p.nombre}' ha sido desactivado.",
+                        )
+                    except Exception as e2:
+                        QMessageBox.critical(self, "Error", str(e2))
+            else:
+                QMessageBox.warning(self, "No se pudo eliminar", msg)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
