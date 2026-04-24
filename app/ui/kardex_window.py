@@ -392,7 +392,12 @@ class KardexWindow(QWidget):
         desde = datetime.combine(d1, time(0, 0, 0))
         hasta = datetime.combine(d2, time(23, 59, 59))
 
-        data = obtener_kardex(product_id=product_id, desde=desde, hasta=hasta)
+        try:
+            data = obtener_kardex(product_id=product_id, desde=desde, hasta=hasta)
+        except Exception as e:
+            QMessageBox.critical(self, "Error al cargar kardex", str(e))
+            return
+
         saldo_inicial = float(data["saldo_inicial"] or 0.0)
         rows = data["rows"]
         advertencias = data.get("advertencias", [])
@@ -415,13 +420,17 @@ class KardexWindow(QWidget):
             tipo_txt = (r.tipo or "").upper().strip()
             color_txt, color_bg = self._row_color(tipo_txt)
 
-            it_fecha = _item(fmt_fecha(r.fecha))
+            fecha_str = fmt_fecha(r.fecha) if r.fecha else "—"
+            cant_str = _fmt_qty(r.cantidad) if r.cantidad is not None else "0"
+            saldo_str = _fmt_qty(r.saldo) if r.saldo is not None else "0"
+
+            it_fecha = _item(fecha_str)
             it_tipo = _item(tipo_txt)
             it_ref = _item(r.referencia or "")
-            it_cant = _item(_fmt_qty(r.cantidad), Qt.AlignRight | Qt.AlignVCenter)
+            it_cant = _item(cant_str, Qt.AlignRight | Qt.AlignVCenter)
             it_precio = _item(_fmt_cop(r.precio), Qt.AlignRight | Qt.AlignVCenter)
             it_sub = _item(_fmt_cop(r.subtotal), Qt.AlignRight | Qt.AlignVCenter)
-            it_saldo = _item(_fmt_qty(r.saldo), Qt.AlignRight | Qt.AlignVCenter)
+            it_saldo = _item(saldo_str, Qt.AlignRight | Qt.AlignVCenter)
 
             it_tipo.setFont(font_tipo)
             it_tipo.setForeground(QBrush(QColor(color_txt)))
@@ -453,7 +462,11 @@ class KardexWindow(QWidget):
         d2 = self.dt_hasta.date().toPython()
         desde = datetime.combine(d1, time(0, 0, 0))
         hasta = datetime.combine(d2, time(23, 59, 59))
-        data = obtener_kardex(product_id=product_id, desde=desde, hasta=hasta)
+        try:
+            data = obtener_kardex(product_id=product_id, desde=desde, hasta=hasta)
+        except Exception as e:
+            QMessageBox.critical(self, "Error al cargar kardex", str(e))
+            return None
         saldo_inicial = float(data["saldo_inicial"] or 0.0)
         rows = data["rows"]
         tot_entradas = tot_ventas = tot_anul = 0.0

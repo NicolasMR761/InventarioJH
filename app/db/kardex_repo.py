@@ -9,7 +9,7 @@ from app.db.models import Entry, EntryDetail, Sale, SaleDetail, Supplier
 
 @dataclass
 class KardexRow:
-    fecha: datetime
+    fecha: datetime | None
     tipo: str  # ENTRADA | VENTA | ANULACION
     referencia: str
     cantidad: float  # + entra, - sale
@@ -130,32 +130,36 @@ def obtener_kardex(
                 if venta_en_rango and not anulacion_en_rango:
                     advertencias.append(
                         f"⚠️ Venta #{sale_id} aparece en el rango pero su anulación "
-                        f"({anulada_en.strftime('%d/%m/%Y')}) cae fuera. "
+                        f"({anulada_en.strftime('%d/%m/%Y') if anulada_en else '?'}) cae fuera. "
                         f"El saldo puede aparecer más bajo de lo real."
                     )
                 elif anulacion_en_rango and not venta_en_rango:
                     advertencias.append(
                         f"⚠️ Anulación de Venta #{sale_id} aparece en el rango pero la venta original "
-                        f"({fecha.strftime('%d/%m/%Y')}) cae fuera. "
+                        f"({fecha.strftime('%d/%m/%Y') if fecha else '?'}) cae fuera. "
                         f"El saldo puede aparecer más alto de lo real."
                     )
 
     # Orden cronológico
     movimientos.sort(key=lambda r: (r.fecha or datetime.min, r.tipo))
 
-    # Saldo inicial = movimientos antes de "desde"
+    # Saldo inicial = movimientos ANTES de "desde" (con fecha definida)
     saldo_inicial = 0.0
     if desde:
         for r in movimientos:
             if r.fecha and r.fecha < desde:
                 saldo_inicial += float(r.cantidad or 0.0)
 
-    # Filtrar rango
+    # Filtrar rango: si r.fecha es None se incluye siempre (registro histórico sin fecha)
     rows: list[KardexRow] = []
     for r in movimientos:
-        if desde and r.fecha and r.fecha < desde:
+        if r.fecha is None:
+            # Registro sin fecha: incluir siempre, no se puede filtrar
+            rows.append(r)
             continue
-        if hasta and r.fecha and r.fecha > hasta:
+        if desde and r.fecha < desde:
+            continue
+        if hasta and r.fecha > hasta:
             continue
         rows.append(r)
 

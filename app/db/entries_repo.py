@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from app.db.database import SessionLocal
 from app.db.models import Entry, EntryDetail, Product, Supplier
 from app.db.cash_repo import registrar_movimiento_en_db
@@ -33,6 +35,7 @@ def crear_entrada(
     pagado: bool = True,
     metodo_pago: str = "Efectivo",
     numero_factura: str | None = None,
+    fecha: datetime | None = None,
 ) -> Entry:
     """
     items = [
@@ -62,6 +65,7 @@ def crear_entrada(
             supplier_id=supplier_id,
             total=0.0,
             numero_factura=(numero_factura or "").strip() or None,
+            fecha=fecha if fecha else datetime.now(),
         )
         total = 0.0
         detalles_txt: list[str] = []
@@ -137,6 +141,8 @@ def crear_entrada(
                     monto=float(entry.total),
                     referencia=f"Entrada {entry.id}",
                     observacion=observacion,
+                    fecha=fecha if fecha else None,
+                    forzar_fecha=fecha is not None,
                 )
 
             db.commit()

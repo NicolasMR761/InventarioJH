@@ -202,17 +202,20 @@ def registrar_movimiento_en_db(
     referencia: str | None = None,
     observacion: str | None = None,
     fecha: datetime | None = None,
+    forzar_fecha: bool = False,
 ) -> CashMovement:
     tipo, concepto, monto = _validar_movimiento(tipo, concepto, monto)
 
     fecha = fecha or datetime.now()
     dia = fecha.date()
 
-    c = db.query(CashClosure).filter(CashClosure.fecha == dia).first()
-    if c:
-        raise ValueError(
-            f"El día {dia} está cerrado. No se pueden registrar movimientos."
-        )
+    # Si el día está cerrado solo bloqueamos cuando es fecha actual (no histórica forzada)
+    if not forzar_fecha:
+        c = db.query(CashClosure).filter(CashClosure.fecha == dia).first()
+        if c:
+            raise ValueError(
+                f"El día {dia} está cerrado. No se pueden registrar movimientos."
+            )
 
     mov = CashMovement(
         tipo=tipo,

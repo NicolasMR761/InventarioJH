@@ -12,8 +12,9 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QFrame,
     QHeaderView,
+    QDateEdit,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor, QBrush, QFont
 
 from app.db.entries_repo import crear_entrada
@@ -83,7 +84,7 @@ class EntriesWindow(QWidget):
         row1.addStretch()
         layout.addLayout(row1)
 
-        # ── FILA 2: N° Factura ──────────────────────────────
+        # ── FILA 2: N° Factura + Fecha ──────────────────────────────
         row2 = QHBoxLayout()
         row2.setSpacing(10)
 
@@ -102,6 +103,22 @@ class EntriesWindow(QWidget):
             lambda t: self.txt_factura.setText(t.upper())
         )
         row2.addWidget(self.txt_factura)
+
+        row2.addSpacing(20)
+
+        lbl_fecha = QLabel("Fecha entrada:")
+        lbl_fecha.setObjectName("fieldLabel")
+        row2.addWidget(lbl_fecha)
+
+        self.dte_fecha = QDateEdit()
+        self.dte_fecha.setObjectName("inputField")
+        self.dte_fecha.setCalendarPopup(True)
+        self.dte_fecha.setDate(QDate.currentDate())
+        self.dte_fecha.setDisplayFormat("dd/MM/yyyy")
+        self.dte_fecha.setMinimumWidth(140)
+        self.dte_fecha.setMaximumWidth(160)
+        row2.addWidget(self.dte_fecha)
+
         row2.addStretch()
         layout.addLayout(row2)
 
@@ -225,6 +242,99 @@ class EntriesWindow(QWidget):
             min-height: 30px;
         }
         #inputField:focus { border-color: #3b82f6; }
+
+        QDateEdit::drop-down {
+            border: none;
+            width: 20px;
+        }
+
+        /* ── Calendario popup ── */
+        QCalendarWidget {
+            background: #111c33;
+            border: 1px solid #1e3a5f;
+            border-radius: 8px;
+            min-width: 280px;
+        }
+
+        /* Barra de navegación (mes/año) */
+        QCalendarWidget QWidget#qt_calendar_navigationbar {
+            background: #0f1a2e;
+            padding: 6px 4px;
+            border-bottom: 1px solid #1e3a5f;
+        }
+
+        /* Botones prev/next mes */
+        QCalendarWidget QToolButton {
+            color: #e2e8f0;
+            background: #1e3a5f;
+            border: none;
+            border-radius: 5px;
+            padding: 4px 8px;
+            font-size: 13px;
+            font-weight: 700;
+            min-width: 28px;
+            min-height: 28px;
+        }
+        QCalendarWidget QToolButton:hover {
+            background: #2563eb;
+        }
+        QCalendarWidget QToolButton:pressed {
+            background: #1d4ed8;
+        }
+
+        /* Ocultar los botones de flecha arriba/abajo del spinbox de año */
+        QCalendarWidget QToolButton::menu-indicator { image: none; }
+
+        /* Spinbox del año */
+        QCalendarWidget QSpinBox {
+            background: #1e3a5f;
+            color: #f1f5f9;
+            border: 1px solid #2563eb;
+            border-radius: 5px;
+            padding: 3px 6px;
+            font-size: 13px;
+            font-weight: 600;
+            min-width: 60px;
+        }
+        QCalendarWidget QSpinBox::up-button,
+        QCalendarWidget QSpinBox::down-button {
+            width: 18px;
+            background: #2563eb;
+            border-radius: 3px;
+        }
+        QCalendarWidget QSpinBox::up-button:hover,
+        QCalendarWidget QSpinBox::down-button:hover {
+            background: #1d4ed8;
+        }
+
+        /* Menú desplegable de mes */
+        QCalendarWidget QMenu {
+            background: #111c33;
+            color: #e2e8f0;
+            border: 1px solid #1e3a5f;
+            border-radius: 6px;
+            padding: 4px;
+        }
+        QCalendarWidget QMenu::item:selected {
+            background: #2563eb;
+            border-radius: 4px;
+        }
+
+        /* Cabecera días de la semana */
+        QCalendarWidget QWidget { alternate-background-color: #0b1120; }
+
+        /* Días del mes */
+        QCalendarWidget QAbstractItemView {
+            background: #111c33;
+            color: #e2e8f0;
+            selection-background-color: #2563eb;
+            selection-color: white;
+            outline: none;
+            gridline-color: #1e293b;
+        }
+        QCalendarWidget QAbstractItemView:disabled {
+            color: #334155;
+        }
 
         #combo {
             background: #111c33;
@@ -582,12 +692,18 @@ class EntriesWindow(QWidget):
             return
 
         try:
+            from datetime import datetime as _dt
+
+            q_date = self.dte_fecha.date()
+            fecha_entrada = _dt(q_date.year(), q_date.month(), q_date.day(), 12, 0, 0)
+
             entry = crear_entrada(
                 supplier_id=supplier_id,
                 items=items,
                 pagado=self.chk_pagado.isChecked(),
                 metodo_pago=self.cbo_metodo.currentText(),
                 numero_factura=numero_factura,
+                fecha=fecha_entrada,
             )
             msg = f"✅ Entrada #{entry.id} guardada · Stock actualizado."
             if self.chk_pagado.isChecked():
@@ -600,6 +716,7 @@ class EntriesWindow(QWidget):
             return
 
         self.txt_factura.clear()
+        self.dte_fecha.setDate(QDate.currentDate())
         self.table.setRowCount(0)
         self.agregar_fila()
         self.recalcular_totales()
