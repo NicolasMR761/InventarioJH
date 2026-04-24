@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QDate
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QScrollArea,
     QAbstractScrollArea,
+    QDateEdit,
 )
 from PySide6.QtGui import QColor, QBrush, QWheelEvent
 
@@ -185,7 +186,7 @@ class SalesWindow(QWidget):
         row1.addWidget(self.btn_agregar)
         root.addLayout(row1)
 
-        # ── FILA 2: Factura + Cliente + Estado + Método ──
+        # ── FILA 2: Factura + Fecha + Cliente + Estado + Método ──
         row2 = QHBoxLayout()
         row2.setSpacing(8)
 
@@ -200,6 +201,17 @@ class SalesWindow(QWidget):
             lambda t: self.txt_factura.setText(t.upper())
         )
         row2.addWidget(self.txt_factura)
+
+        lbl_fecha = QLabel("Fecha:")
+        lbl_fecha.setObjectName("fieldLabel")
+        row2.addWidget(lbl_fecha)
+        self.dte_fecha = QDateEdit()
+        self.dte_fecha.setObjectName("inputField")
+        self.dte_fecha.setCalendarPopup(True)
+        self.dte_fecha.setDate(QDate.currentDate())
+        self.dte_fecha.setDisplayFormat("dd/MM/yyyy")
+        self.dte_fecha.setFixedWidth(130)
+        row2.addWidget(self.dte_fecha)
 
         lbl_cl = QLabel("Cliente:")
         lbl_cl.setObjectName("fieldLabel")
@@ -438,6 +450,52 @@ class SalesWindow(QWidget):
             color: #e2e8f0; min-height: 28px;
         }
         #inputField:focus { border-color: #3b82f6; }
+
+        QDateEdit::drop-down { border: none; width: 20px; }
+        QCalendarWidget {
+            background: #111c33;
+            border: 1px solid #1e3a5f;
+            border-radius: 8px;
+            min-width: 280px;
+        }
+        QCalendarWidget QWidget#qt_calendar_navigationbar {
+            background: #0f1a2e;
+            padding: 6px 4px;
+            border-bottom: 1px solid #1e3a5f;
+        }
+        QCalendarWidget QToolButton {
+            color: #e2e8f0; background: #1e3a5f; border: none;
+            border-radius: 5px; padding: 4px 8px;
+            font-size: 13px; font-weight: 700;
+            min-width: 28px; min-height: 28px;
+        }
+        QCalendarWidget QToolButton:hover { background: #2563eb; }
+        QCalendarWidget QToolButton::menu-indicator { image: none; }
+        QCalendarWidget QSpinBox {
+            background: #1e3a5f; color: #f1f5f9;
+            border: 1px solid #2563eb; border-radius: 5px;
+            padding: 3px 6px; font-size: 13px; font-weight: 600; min-width: 60px;
+        }
+        QCalendarWidget QSpinBox::up-button,
+        QCalendarWidget QSpinBox::down-button {
+            width: 18px; background: #2563eb; border-radius: 3px;
+        }
+        QCalendarWidget QSpinBox::up-button:hover,
+        QCalendarWidget QSpinBox::down-button:hover { background: #1d4ed8; }
+        QCalendarWidget QMenu {
+            background: #111c33; color: #e2e8f0;
+            border: 1px solid #1e3a5f; border-radius: 6px; padding: 4px;
+        }
+        QCalendarWidget QMenu::item:selected {
+            background: #2563eb; border-radius: 4px;
+        }
+        QCalendarWidget QWidget { alternate-background-color: #0b1120; }
+        QCalendarWidget QAbstractItemView {
+            background: #111c33; color: #e2e8f0;
+            selection-background-color: #2563eb;
+            selection-color: white; outline: none; gridline-color: #1e293b;
+        }
+        QCalendarWidget QAbstractItemView:disabled { color: #334155; }
 
         #combo {
             background: #111c33; border: 1px solid #1e3a5f;
@@ -685,6 +743,7 @@ class SalesWindow(QWidget):
             self.tbl.setRowCount(0)
             self.txt_cliente.clear()
             self.txt_factura.clear()
+            self.dte_fecha.setDate(QDate.currentDate())
             self.actualizar_total()
         else:
             super().keyPressEvent(event)
@@ -913,12 +972,18 @@ class SalesWindow(QWidget):
                     QMessageBox.critical(self, "Error", str(e))
                     return
         try:
+            from datetime import datetime as _dt
+
+            q_date = self.dte_fecha.date()
+            fecha_venta = _dt(q_date.year(), q_date.month(), q_date.day(), 12, 0, 0)
+
             sale = crear_venta(
                 self.items,
                 metodo_pago=metodo,
                 customer_id=customer_id,
                 estado_pago=estado_pago,
                 numero_factura=numero_factura,
+                fecha=fecha_venta,
             )
         except Exception as e:
             QMessageBox.critical(self, "Error al guardar", str(e))
@@ -942,6 +1007,7 @@ class SalesWindow(QWidget):
         self.tbl.setRowCount(0)
         self.txt_cliente.clear()
         self.txt_factura.clear()
+        self.dte_fecha.setDate(QDate.currentDate())
         self.actualizar_total()
         self.refrescar_todo()
 

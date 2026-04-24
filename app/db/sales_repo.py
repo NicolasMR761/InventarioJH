@@ -68,6 +68,7 @@ def crear_venta(
     customer_id: int | None = None,
     estado_pago: str = "PAGADO",
     numero_factura: str | None = None,
+    fecha: datetime | None = None,
 ) -> Sale:
     """
     estado_pago: "PAGADO" | "PENDIENTE"
@@ -100,6 +101,7 @@ def crear_venta(
             anulada=False,
             motivo_anulacion=None,
             anulada_en=None,
+            fecha=fecha if fecha else datetime.now(),
             pagado_en=datetime.now() if estado_pago == "PAGADO" else None,
         )
         total = 0.0
@@ -181,6 +183,8 @@ def crear_venta(
                     monto=float(sale.total),
                     referencia=f"Venta #{sale.id}",
                     observacion=observacion,
+                    fecha=fecha if fecha else None,
+                    forzar_fecha=fecha is not None,
                 )
 
             db.commit()
