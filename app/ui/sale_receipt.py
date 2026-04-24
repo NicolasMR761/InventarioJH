@@ -150,7 +150,7 @@ def _build_pdf(path: str, sale, modo_bw: bool = False) -> None:
 
     # ── Datos de la venta ────────────────────────────────────────────────────
     try:
-        fecha_txt = sale.fecha.strftime("%d/%m/%Y  %H:%M")
+        fecha_txt = sale.fecha.strftime("%d/%m/%Y")
     except Exception:
         fecha_txt = str(getattr(sale, "fecha", ""))
 

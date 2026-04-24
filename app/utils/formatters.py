@@ -2,7 +2,19 @@ from datetime import datetime, date
 
 
 def fmt_fecha(dt) -> str:
-    """Formatea fecha o datetime como DD/MM/AAAA HH:MM"""
+    """Formatea fecha o datetime como DD/MM/AAAA (sin hora)"""
+    if not dt:
+        return ""
+    try:
+        if isinstance(dt, (datetime, date)):
+            return dt.strftime("%d/%m/%Y")
+        return str(dt)
+    except Exception:
+        return str(dt)
+
+
+def fmt_fecha_hora(dt) -> str:
+    """Formatea fecha o datetime como DD/MM/AAAA HH:MM (con hora)"""
     if not dt:
         return ""
     try:

@@ -586,7 +586,7 @@ class KardexWindow(QWidget):
                     c.showPage()
                     y = h - 2 * cm
                     header_page()
-                fecha_txt = str(fmt_fecha(r.fecha) or "")[:16]
+                fecha_txt = str(fmt_fecha(r.fecha) or "")
                 tipo_txt = (r.tipo or "").upper().strip()
                 c.drawString(2 * cm, y, fecha_txt)
                 c.drawString(5.2 * cm, y, tipo_txt[:10])

@@ -585,7 +585,7 @@ class CashWindow(QWidget):
         fecha_txt = ""
         if getattr(m, "fecha", None):
             try:
-                fecha_txt = m.fecha.strftime("%d/%m/%Y  %H:%M")
+                fecha_txt = m.fecha.strftime("%d/%m/%Y")
             except Exception:
                 fecha_txt = str(m.fecha)
 

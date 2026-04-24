@@ -352,7 +352,7 @@ def _build_historial_pdf(
         c.setFillColor(COL_MUTED)
         c.setFont("Helvetica", 7)
         try:
-            fecha_txt = s.fecha.strftime("%d/%m/%Y %H:%M")
+            fecha_txt = s.fecha.strftime("%d/%m/%Y")
         except Exception:
             fecha_txt = str(s.fecha)
         c.drawString(COL_POSITIONS["fecha"][0] + 1 * mm, mid_y, fecha_txt)

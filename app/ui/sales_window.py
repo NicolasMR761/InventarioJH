@@ -1066,7 +1066,7 @@ class SalesWindow(QWidget):
             QMessageBox.information(self, "Detalle", "No se encontró la venta.")
             return
         try:
-            fecha_txt = sale.fecha.strftime("%d/%m/%Y  %H:%M")
+            fecha_txt = sale.fecha.strftime("%d/%m/%Y")
         except Exception:
             fecha_txt = str(getattr(sale, "fecha", ""))
 
@@ -1112,7 +1112,7 @@ class SalesWindow(QWidget):
                 "<tr><td style='padding:6px 0;color:#475569;font-size:11px;"
                 "text-transform:uppercase;letter-spacing:1px;'>Anulada el</td>"
                 "<td style='padding:6px 0;color:#f87171;font-size:13px;font-weight:600;'>"
-                + sale.anulada_en.strftime("%d/%m/%Y %H:%M")
+                + sale.anulada_en.strftime("%d/%m/%Y")
                 + "</td></tr>"
             )
         else:
